@@ -270,6 +270,66 @@ struct ConduitInferenceProviderOptionsMappingTests {
         #expect(config?.toolChoice == .auto)
     }
 
+    @Test("Rejects unsupported conduit runtime policy provider settings")
+    func rejectsUnsupportedRuntimePolicyProviderSettings() async throws {
+        struct MockModelID: Conduit.ModelIdentifying {
+            let rawValue: String
+            var displayName: String { rawValue }
+            var provider: Conduit.ProviderType { .openAI }
+            var description: String { rawValue }
+            init(_ rawValue: String) { self.rawValue = rawValue }
+        }
+
+        struct CapturingTextGenerator: Conduit.TextGenerator {
+            typealias ModelID = MockModelID
+
+            func generate(_ prompt: String, model _: ModelID, config _: Conduit.GenerateConfig) async throws -> String {
+                prompt
+            }
+
+            func generate(
+                messages _: [Conduit.Message],
+                model _: ModelID,
+                config _: Conduit.GenerateConfig
+            ) async throws -> Conduit.GenerationResult {
+                Conduit.GenerationResult(
+                    text: "",
+                    tokenCount: 0,
+                    generationTime: 0,
+                    tokensPerSecond: 0,
+                    finishReason: .stop
+                )
+            }
+
+            func stream(_ prompt: String, model _: ModelID, config _: Conduit.GenerateConfig) -> AsyncThrowingStream<String, Error> {
+                StreamHelper.makeTrackedStream { continuation in
+                    continuation.yield(prompt)
+                    continuation.finish()
+                }
+            }
+
+            func streamWithMetadata(
+                messages _: [Conduit.Message],
+                model _: ModelID,
+                config _: Conduit.GenerateConfig
+            ) -> AsyncThrowingStream<Conduit.GenerationChunk, Error> {
+                StreamHelper.makeTrackedStream { continuation in
+                    continuation.finish()
+                }
+            }
+        }
+
+        let provider = CapturingTextGenerator()
+        let bridge = ConduitInferenceProvider(provider: provider, model: MockModelID("mock"))
+        let options = InferenceOptions(
+            providerSettings: ["conduit.runtime.policy.kv_quantization.enabled": .bool(true)]
+        )
+
+        await #expect(throws: AgentError.self) {
+            _ = try await bridge.generate(prompt: "hello", options: options)
+        }
+    }
+
 
     // TODO: Restore mapsProviderSettingsRuntimeFeatures and mapsProviderSettingsRuntimePolicy
     // once Conduit ships ProviderRuntimeFeatureConfiguration and ProviderRuntimePolicyOverride.

@@ -95,3 +95,45 @@
 - `swift build` passes.
 - `swift test` fails in this sandbox due filesystem exhaustion while compiling dependency test artifacts:
   `No space left on device`.
+
+# Task Plan (Framework Issue Audit - 2026-03-08)
+- [x] Confirm baseline status and validate findings against current head.
+- [x] Add failing tests for HTTPMCPServer insecure API key handling, ZoniSearchTool unconfigured behavior, and Membrane adapter checkpoint roundtrip.
+- [x] Implement fixes in MCP, Tools, Membrane integration, and FoundationModels streaming cancellation.
+- [x] Run focused suites, then full `swift test` and `swift build`.
+- [ ] Commit with detailed message; attempt push + PR creation.
+
+# Review (Framework Issue Audit - 2026-03-08)
+- Fixed HTTP MCP configuration safety:
+- `Sources/Swarm/MCP/HTTPMCPServer.swift`: changed initializer to `throws`; replaced `precondition` crash on insecure API-key URL with typed `MCPError.invalidParams`.
+- `Tests/SwarmTests/MCP/HTTPMCPServerTests.swift`: added `Rejects non-HTTPS URL when apiKey is provided` and updated call sites to `try`.
+- `Tests/SwarmTests/MCP/HTTPMCPServerRetryTests.swift`: updated initializer call to `try`.
+
+- Fixed placeholder/dead behavior in shipped tool:
+- `Sources/Swarm/Tools/ZoniSearchTool.swift`: replaced placeholder success string with deterministic typed error `ZoniSearchTool.Error.pipelineNotConfigured`.
+- `Tests/SwarmTests/Tools/ZoniSearchToolTests.swift`: added regression test asserting unconfigured execution throws.
+
+- Fixed Membrane checkpoint persistence gap:
+- `Sources/Swarm/Integration/Membrane/MembraneAgentAdapter.swift`:
+  - implemented `restore(checkpointData:)` to decode persisted adapter state,
+  - implemented `snapshotCheckpointData()` to encode state,
+  - clear state on `restore(nil)`,
+  - updated `syncCheckpointState` to materialize snapshot updates.
+- `Tests/SwarmTests/MembraneIntegrationTests.swift`: added roundtrip test for loaded tool state and clear-on-nil restore test.
+
+- Fixed Conduit runtime policy silent no-op:
+- `Sources/Swarm/Providers/Conduit/ConduitInferenceProvider.swift`: made options application throwable; runtime policy keys with `conduit.runtime.` now fail fast with `AgentError.inferenceProviderUnavailable` instead of being silently ignored.
+- `Tests/SwarmTests/Providers/ConduitInferenceProviderOptionsMappingTests.swift`: added regression test asserting rejection of unsupported runtime policy keys.
+
+- Fixed FoundationModels stream cancellation wiring:
+- `Sources/Swarm/Providers/LanguageModelSession.swift`: moved stream implementation to `StreamHelper.makeTrackedStream` for termination cancellation; maps `CancellationError` to `AgentError.cancelled`.
+
+- Verification:
+- Focused checks passed:
+  - `swift test --filter HTTPMCPServer`
+  - `swift test --filter ZoniSearchTool`
+  - `swift test --filter MembraneIntegrationTests/defaultAdapter`
+  - `swift test --filter ConduitInferenceProviderOptionsMappingTests/rejectsUnsupportedRuntimePolicyProviderSettings`
+- Full verification passed:
+  - `swift test` (1992 tests, 0 failures)
+  - `swift build` (success)

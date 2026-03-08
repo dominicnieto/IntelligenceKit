@@ -14,6 +14,16 @@ import Foundation
 /// that has been indexed using Zoni's technical pipeline.
 @Tool("Searches a private knowledge base of documents to find specific, factual information.")
 public struct ZoniSearchTool {
+    public enum Error: Swift.Error, LocalizedError, Sendable {
+        case pipelineNotConfigured
+
+        public var errorDescription: String? {
+            switch self {
+            case .pipelineNotConfigured:
+                "ZoniSearchTool is not configured with a retrieval pipeline."
+            }
+        }
+    }
     
     @Parameter("The specific question or information to look up in the documents")
     var query: String
@@ -51,6 +61,6 @@ public struct ZoniSearchTool {
         """
         */
         
-        return "ZoniSearchTool placeholder: Integrate with your RAGPipeline to return factual answers from documents."
+        throw Error.pipelineNotConfigured
     }
 }

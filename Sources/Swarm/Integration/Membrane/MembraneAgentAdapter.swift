@@ -289,13 +289,30 @@ public actor DefaultMembraneAgentAdapter: MembraneAgentAdapter {
         }
     }
 
-    public func restore(checkpointData _: Data?) async throws {
-        // TODO: Restore when MembraneHive ships MembraneCheckpointAdapter/MembraneCheckpointState.
+    public func restore(checkpointData: Data?) async throws {
+        guard let checkpointData else {
+            loadedToolNames = []
+            allowListToolNames = []
+            pointerIDs = []
+            usageCounts = [:]
+            return
+        }
+
+        let state = try JSONDecoder().decode(CheckpointState.self, from: checkpointData)
+        loadedToolNames = state.loadedToolNames
+        allowListToolNames = state.allowListToolNames
+        pointerIDs = state.pointerIDs
+        usageCounts = state.usageCounts
     }
 
     public func snapshotCheckpointData() async throws -> Data? {
-        // TODO: Restore when MembraneHive ships MembraneCheckpointAdapter.
-        return nil
+        let state = CheckpointState(
+            loadedToolNames: loadedToolNames,
+            allowListToolNames: allowListToolNames,
+            pointerIDs: pointerIDs,
+            usageCounts: usageCounts
+        )
+        return try JSONEncoder().encode(state)
     }
 
     private let configuration: MembraneFeatureConfiguration
@@ -386,6 +403,13 @@ public actor DefaultMembraneAgentAdapter: MembraneAgentAdapter {
     }
 
     private func syncCheckpointState(totalTokens _: Int = 4_096) async throws {
-        // TODO: Restore when MembraneHive ships MembraneCheckpointState/MembraneCheckpointAdapter.
+        _ = try await snapshotCheckpointData()
+    }
+
+    private struct CheckpointState: Codable, Sendable {
+        let loadedToolNames: [String]
+        let allowListToolNames: [String]
+        let pointerIDs: [String]
+        let usageCounts: [String: Int]
     }
 }

@@ -17,12 +17,19 @@ public struct ConduitInferenceProvider<Provider: Conduit.TextGenerator>: Inferen
     }
 
     public func generate(prompt: String, options: InferenceOptions) async throws -> String {
-        let config = apply(options: options, to: baseConfig)
+        let config = try apply(options: options, to: baseConfig)
         return try await provider.generate(prompt, model: model, config: config)
     }
 
     public func stream(prompt: String, options: InferenceOptions) -> AsyncThrowingStream<String, Error> {
-        let config = apply(options: options, to: baseConfig)
+        let config: Conduit.GenerateConfig
+        do {
+            config = try apply(options: options, to: baseConfig)
+        } catch {
+            return StreamHelper.makeTrackedStream { continuation in
+                continuation.finish(throwing: error)
+            }
+        }
         return provider.stream(prompt, model: model, config: config)
     }
 
@@ -31,7 +38,7 @@ public struct ConduitInferenceProvider<Provider: Conduit.TextGenerator>: Inferen
         tools: [ToolSchema],
         options: InferenceOptions
     ) async throws -> InferenceResponse {
-        var config = apply(options: options, to: baseConfig)
+        var config = try apply(options: options, to: baseConfig)
         let toolDefinitions = try ConduitToolSchemaConverter.toolDefinitions(from: tools)
         config = config.tools(toolDefinitions)
 
@@ -68,7 +75,7 @@ public struct ConduitInferenceProvider<Provider: Conduit.TextGenerator>: Inferen
         options: InferenceOptions
     ) -> AsyncThrowingStream<InferenceStreamUpdate, Error> {
         StreamHelper.makeTrackedStream { continuation in
-            var config = apply(options: options, to: baseConfig)
+            var config = try apply(options: options, to: baseConfig)
             let toolDefinitions = try ConduitToolSchemaConverter.toolDefinitions(from: tools)
             config = config.tools(toolDefinitions)
 
@@ -129,7 +136,7 @@ public struct ConduitInferenceProvider<Provider: Conduit.TextGenerator>: Inferen
     private let model: Provider.ModelID
     private let baseConfig: Conduit.GenerateConfig
 
-    private func apply(options: InferenceOptions, to config: Conduit.GenerateConfig) -> Conduit.GenerateConfig {
+    private func apply(options: InferenceOptions, to config: Conduit.GenerateConfig) throws -> Conduit.GenerateConfig {
         var updated = config
 
         updated = updated.temperature(Float(options.temperature))
@@ -167,7 +174,7 @@ public struct ConduitInferenceProvider<Provider: Conduit.TextGenerator>: Inferen
         }
 
         if let providerSettings = options.providerSettings, !providerSettings.isEmpty {
-            updated = applyProviderRuntimeSettings(providerSettings, to: updated)
+            updated = try applyProviderRuntimeSettings(providerSettings, to: updated)
         }
 
         return updated
@@ -176,10 +183,18 @@ public struct ConduitInferenceProvider<Provider: Conduit.TextGenerator>: Inferen
     private func applyProviderRuntimeSettings(
         _ providerSettings: [String: SendableValue],
         to config: Conduit.GenerateConfig
-    ) -> Conduit.GenerateConfig {
-        // TODO: Map providerSettings keys (conduit.runtime.*) into
-        // Conduit.ProviderRuntimeFeatureConfiguration and
-        // Conduit.ProviderRuntimePolicyOverride once Conduit ships those types.
+    ) throws -> Conduit.GenerateConfig {
+        let unsupportedRuntimeKeys = providerSettings.keys
+            .filter { $0.hasPrefix("conduit.runtime.") }
+            .sorted()
+
+        if !unsupportedRuntimeKeys.isEmpty {
+            let keyList = unsupportedRuntimeKeys.joined(separator: ", ")
+            throw AgentError.inferenceProviderUnavailable(
+                reason: "Conduit runtime policy settings are not supported yet: \(keyList)"
+            )
+        }
+
         return config
     }
 

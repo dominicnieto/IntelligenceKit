@@ -36,17 +36,15 @@ import Foundation
         }
 
         public func stream(prompt: String, options _: InferenceOptions) -> AsyncThrowingStream<String, Error> {
-            AsyncThrowingStream { continuation in
-                Task {
-                    do {
-                        // For streaming, we'll generate the full response and yield it
-                        for try await stream in self.streamResponse(to: prompt) {
-                            continuation.yield(stream.content)
-                        }
-                        continuation.finish()
-                    } catch {
-                        continuation.finish(throwing: error)
+            StreamHelper.makeTrackedStream { continuation in
+                do {
+                    // For streaming, we'll generate the full response and yield it.
+                    for try await stream in self.streamResponse(to: prompt) {
+                        continuation.yield(stream.content)
                     }
+                    continuation.finish()
+                } catch is CancellationError {
+                    throw AgentError.cancelled
                 }
             }
         }

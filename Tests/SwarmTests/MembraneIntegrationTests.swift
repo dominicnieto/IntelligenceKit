@@ -128,6 +128,59 @@ struct MembraneIntegrationTests {
         #expect(result.metadata["membrane.fallback.used"] == .bool(true))
         #expect(result.metadata["membrane.fallback.error"]?.stringValue?.contains("forced membrane failure") == true)
     }
+
+    @Test("Default adapter checkpoint state roundtrips loaded tools")
+    func defaultAdapterCheckpointRoundtrip() async throws {
+        let adapter = DefaultMembraneAgentAdapter(
+            configuration: MembraneFeatureConfiguration(jitMinToolCount: 2, defaultJITLoadCount: 1)
+        )
+        _ = try await adapter.handleInternalToolCall(
+            name: MembraneInternalToolName.addTools,
+            arguments: ["tool_names": .array([.string("zzz_tool")])]
+        )
+        let snapshot = try await adapter.snapshotCheckpointData()
+        #expect(snapshot != nil)
+
+        let restored = DefaultMembraneAgentAdapter(
+            configuration: MembraneFeatureConfiguration(jitMinToolCount: 2, defaultJITLoadCount: 1)
+        )
+        try await restored.restore(checkpointData: snapshot)
+
+        let planned = try await restored.plan(
+            prompt: "hello",
+            toolSchemas: defaultAdapterToolSchemas(),
+            profile: .strict4k
+        )
+
+        #expect(planned.toolSchemas.contains(where: { $0.name == "zzz_tool" }))
+    }
+
+    @Test("Default adapter restore(nil) clears checkpointed state")
+    func defaultAdapterRestoreNilClearsState() async throws {
+        let adapter = DefaultMembraneAgentAdapter(
+            configuration: MembraneFeatureConfiguration(jitMinToolCount: 2, defaultJITLoadCount: 1)
+        )
+        _ = try await adapter.handleInternalToolCall(
+            name: MembraneInternalToolName.addTools,
+            arguments: ["tool_names": .array([.string("zzz_tool")])]
+        )
+
+        try await adapter.restore(checkpointData: nil)
+
+        let planned = try await adapter.plan(
+            prompt: "hello",
+            toolSchemas: defaultAdapterToolSchemas(),
+            profile: .strict4k
+        )
+        #expect(planned.toolSchemas.contains(where: { $0.name == "zzz_tool" }) == false)
+    }
+}
+
+private func defaultAdapterToolSchemas() -> [ToolSchema] {
+    let names = (0 ..< 6).map { String(format: "tool_%02d", $0) } + ["zzz_tool"]
+    return names.map { name in
+        ToolSchema(name: name, description: "test \(name)", parameters: [])
+    }
 }
 
 private func makeLargeSession() async throws -> InMemorySession {

@@ -23,7 +23,7 @@ struct HTTPMCPServerRetryTests {
             return (response, Data("bad request".utf8))
         }
 
-        let server = HTTPMCPServer(
+        let server = try HTTPMCPServer(
             url: URL(string: "https://mcp.example.com/api")!,
             name: "retry-test",
             maxRetries: 3,

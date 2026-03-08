@@ -81,12 +81,11 @@ public actor HTTPMCPServer: MCPServer {
         timeout: TimeInterval = 30.0,
         maxRetries: Int = 3,
         session: URLSession = .shared
-    ) {
-        // Security: Enforce HTTPS when API keys are used to prevent credential exposure
-        if apiKey != nil {
-            precondition(
-                url.scheme?.lowercased() == "https",
-                "HTTPMCPServer: HTTPS is required when using API keys to prevent credential exposure. URL scheme: \(url.scheme ?? "nil")"
+    ) throws {
+        // Security: Enforce HTTPS when API keys are used to prevent credential exposure.
+        if apiKey != nil, url.scheme?.lowercased() != "https" {
+            throw MCPError.invalidParams(
+                "HTTPS is required when using API keys. URL scheme: \(url.scheme ?? "nil")"
             )
         }
 

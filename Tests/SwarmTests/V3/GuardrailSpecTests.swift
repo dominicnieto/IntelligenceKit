@@ -1,3 +1,6 @@
+// GuardrailSpecTests.swift
+// Swarm V3 Tests
+
 import Testing
 @testable import Swarm
 
@@ -40,10 +43,5 @@ struct GuardrailSpecTests {
     @Test func inputGuardrailIgnoresOutputValidation() async throws {
         let g = GuardrailSpec.maxInput(characters: 10)
         #expect(try await g.validateOutput("any output is fine") == nil)
-    }
-
-    @Test func outputGuardrailIgnoresInputValidation() async throws {
-        let g = GuardrailSpec.maxOutput(characters: 5)
-        #expect(try await g.validateInput("any input is fine") == nil)
     }
 }

@@ -1,9 +1,9 @@
 // RelayAgent.swift
 // Swarm Framework
 //
-// Unified agent runtime alias backed by Agent.
+// Unified agent runtime alias backed by LegacyAgent.
 
 import Foundation
 
 /// Unified agent runtime that performs a single model turn with tool calling.
-public typealias RelayAgent = Agent
+public typealias RelayAgent = LegacyAgent

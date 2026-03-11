@@ -35,7 +35,7 @@ public typealias OutputValidationHandler = @Sendable (String, any AgentRuntime, 
 /// }
 ///
 /// let result = try await guardrail.validate(
-///     "Agent response text",
+///     "LegacyAgent response text",
 ///     agent: myAgent,
 ///     context: context
 /// )

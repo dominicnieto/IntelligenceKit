@@ -92,11 +92,11 @@ extension AgentError: LocalizedError {
         case let .invalidInput(reason):
             "Invalid input: \(reason)"
         case .cancelled:
-            "Agent execution was cancelled"
+            "LegacyAgent execution was cancelled"
         case let .maxIterationsExceeded(iterations):
-            "Agent exceeded maximum iterations (\(iterations))"
+            "LegacyAgent exceeded maximum iterations (\(iterations))"
         case let .timeout(duration):
-            "Agent execution timed out after \(duration)"
+            "LegacyAgent execution timed out after \(duration)"
         case let .invalidLoop(reason):
             "Invalid agent loop: \(reason)"
         case let .toolNotFound(name):
@@ -128,7 +128,7 @@ extension AgentError: LocalizedError {
         case let .embeddingFailed(reason):
             "Embedding failed: \(reason)"
         case let .agentNotFound(name):
-            "Agent not found: '\(name)'"
+            "LegacyAgent not found: '\(name)'"
         case let .internalError(reason):
             "Internal error: \(reason)"
         case .toolCallingRequiresCloudProvider:
@@ -139,7 +139,7 @@ extension AgentError: LocalizedError {
     public var recoverySuggestion: String? {
         switch self {
         case .toolCallingRequiresCloudProvider:
-            "Call `await Swarm.configure(cloudProvider:)` or pass a tool-calling-capable provider explicitly to `Agent(...)`."
+            "Call `await Swarm.configure(cloudProvider:)` or pass a tool-calling-capable provider explicitly to `LegacyAgent(...)`."
         default:
             nil
         }

@@ -5,7 +5,7 @@ import Foundation
 ///
 /// Use with any API that accepts an `InferenceProvider`:
 /// ```swift
-/// let agent = Agent(.openAI(key: "..."))
+/// let agent = LegacyAgent(.openAI(key: "..."))
 /// ```
 ///
 /// Advanced customization is intentionally hidden behind `.advanced { ... }`.

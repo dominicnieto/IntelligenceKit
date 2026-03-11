@@ -102,7 +102,7 @@ private struct CustomerServiceAgent: AgentLoopDefinition {
 
 // MARK: - Tests
 
-@Suite("Declarative Agent DSL Tests")
+@Suite("Declarative LegacyAgent DSL Tests")
 struct DeclarativeAgentDSLTests {
     @Test("AgentLoop runs steps sequentially")
     func agentLoopIsSequential() async throws {
@@ -264,7 +264,7 @@ struct DeclarativeAgentDSLTests {
         }
     }
 
-    @Test("Agent handoffs emit RunHooks.onHandoff")
+    @Test("LegacyAgent handoffs emit RunHooks.onHandoff")
     func handoffEmitsHook() async throws {
         actor Recorder: RunHooks {
             var events: [(from: String, to: String)] = []

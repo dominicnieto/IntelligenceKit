@@ -25,7 +25,7 @@ import Foundation
 public actor ResilientAgent: AgentRuntime {
     // MARK: Public
 
-    // MARK: - Agent Protocol (nonisolated)
+    // MARK: - LegacyAgent Protocol (nonisolated)
 
     nonisolated public let tools: [any AnyJSONTool]
     nonisolated public let instructions: String
@@ -136,7 +136,7 @@ public actor ResilientAgent: AgentRuntime {
         )
     }
 
-    // MARK: - Agent Protocol
+    // MARK: - LegacyAgent Protocol
 
     public func run(_ input: String, session: (any Session)? = nil, hooks: (any RunHooks)? = nil) async throws -> AgentResult {
         if isCancelled {
@@ -448,7 +448,7 @@ public actor ResilientAgent: AgentRuntime {
     }
 }
 
-// MARK: - Agent Resilience Extensions
+// MARK: - LegacyAgent Resilience Extensions
 
 public extension AgentRuntime {
     /// Wraps this agent with retry behavior.

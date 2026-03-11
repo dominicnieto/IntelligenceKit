@@ -1,12 +1,15 @@
+// GuardrailSpec.swift
+// Swarm V3 API
+//
+// Single enum replacing 14 guardrail protocol/builder/closure types.
+
 import Foundation
 
-/// Replaces 14 protocol/builder/closure guardrail types with a single enum.
-/// Returns `nil` = pass, non-nil `String` = block reason.
+// MARK: - GuardrailSpec
+
+/// Unified guardrail specification. Replaces 14 separate guardrail types.
 ///
-/// ```swift
-/// let agent = AgentV3("Help.")
-///     .guardrails(.maxInput(characters: 1000), .inputNotEmpty)
-/// ```
+/// Returns `nil` on pass, a block-reason `String` on failure.
 public enum GuardrailSpec: Sendable {
     // Input guardrails
     case maxInput(characters: Int)
@@ -17,30 +20,35 @@ public enum GuardrailSpec: Sendable {
     case maxOutput(characters: Int)
     case outputCustom(name: String, validate: @Sendable (String) async throws -> String?)
 
-    /// Returns `nil` if valid, block reason string if blocked.
+    /// Validate input. Returns `nil` if valid, block reason if not.
     public func validateInput(_ input: String) async throws -> String? {
         switch self {
         case .maxInput(let max):
-            return input.count > max ? "Input exceeds \(max) characters (\(input.count))" : nil
+            return input.count > max
+                ? "Input exceeds \(max) characters (\(input.count))"
+                : nil
         case .inputNotEmpty:
             return input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ? "Input must not be empty" : nil
+                ? "Input must not be empty"
+                : nil
         case .inputCustom(_, let validate):
             return try await validate(input)
         default:
-            return nil // Output guardrails don't validate input
+            return nil
         }
     }
 
-    /// Returns `nil` if valid, block reason string if blocked.
+    /// Validate output. Returns `nil` if valid, block reason if not.
     public func validateOutput(_ output: String) async throws -> String? {
         switch self {
         case .maxOutput(let max):
-            return output.count > max ? "Output exceeds \(max) characters (\(output.count))" : nil
+            return output.count > max
+                ? "Output exceeds \(max) characters (\(output.count))"
+                : nil
         case .outputCustom(_, let validate):
             return try await validate(output)
         default:
-            return nil // Input guardrails don't validate output
+            return nil
         }
     }
 }

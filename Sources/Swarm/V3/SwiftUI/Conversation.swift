@@ -40,9 +40,9 @@ public final class Conversation {
     public private(set) var isThinking: Bool = false
     public private(set) var streamingText: String = ""
 
-    private let agent: AgentV3
+    private let agent: Agent
 
-    public init(agent: AgentV3) {
+    public init(agent: Agent) {
         self.agent = agent
     }
 

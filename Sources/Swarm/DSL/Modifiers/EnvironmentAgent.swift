@@ -1,7 +1,7 @@
 // EnvironmentAgent.swift
 // Swarm Framework
 //
-// Agent wrapper that applies task-local AgentEnvironment values.
+// LegacyAgent wrapper that applies task-local AgentEnvironment values.
 
 import Foundation
 

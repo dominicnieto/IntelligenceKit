@@ -28,13 +28,13 @@ public enum EventLevel: Int, Sendable, Codable, Comparable, CaseIterable {
 
 /// The kind of event being traced.
 public enum EventKind: String, Sendable, Codable, CaseIterable {
-    /// Agent execution started
+    /// LegacyAgent execution started
     case agentStart
-    /// Agent execution completed successfully
+    /// LegacyAgent execution completed successfully
     case agentComplete
-    /// Agent execution encountered an error
+    /// LegacyAgent execution encountered an error
     case agentError
-    /// Agent execution was cancelled
+    /// LegacyAgent execution was cancelled
     case agentCancelled
 
     /// Tool invocation started
@@ -44,11 +44,11 @@ public enum EventKind: String, Sendable, Codable, CaseIterable {
     /// Tool execution failed
     case toolError
 
-    /// Agent reasoning/thinking step
+    /// LegacyAgent reasoning/thinking step
     case thought
-    /// Agent made a decision
+    /// LegacyAgent made a decision
     case decision
-    /// Agent created or updated a plan
+    /// LegacyAgent created or updated a plan
     case plan
 
     /// Memory read operation
@@ -390,7 +390,7 @@ public extension TraceEvent {
         metadata: [String: SendableValue] = [:],
         source: SourceLocation? = nil
     ) -> TraceEvent {
-        Builder(traceId: traceId, kind: .agentStart, message: "Agent started", spanId: spanId)
+        Builder(traceId: traceId, kind: .agentStart, message: "LegacyAgent started", spanId: spanId)
             .agent(agentName)
             .metadata(metadata)
             .source(source ?? SourceLocation())
@@ -406,7 +406,7 @@ public extension TraceEvent {
         metadata: [String: SendableValue] = [:],
         source: SourceLocation? = nil
     ) -> TraceEvent {
-        Builder(traceId: traceId, kind: .agentComplete, message: "Agent completed", spanId: spanId)
+        Builder(traceId: traceId, kind: .agentComplete, message: "LegacyAgent completed", spanId: spanId)
             .agent(agentName)
             .duration(duration)
             .metadata(metadata)
@@ -423,7 +423,7 @@ public extension TraceEvent {
         metadata: [String: SendableValue] = [:],
         source: SourceLocation? = nil
     ) -> TraceEvent {
-        Builder(traceId: traceId, kind: .agentError, message: "Agent error", spanId: spanId, level: .error)
+        Builder(traceId: traceId, kind: .agentError, message: "LegacyAgent error", spanId: spanId, level: .error)
             .agent(agentName)
             .error(error)
             .metadata(metadata)

@@ -4,25 +4,25 @@ import Testing
 @Suite("HandoffTool")
 struct HandoffToolTests {
     @Test func handoffNameDerivedFromTarget() {
-        let specialist = AgentV3("Specialist.").named("code-expert")
+        let specialist = Agent("Specialist.").named("code-expert")
         let handoff = Handoff(specialist)
         #expect(handoff.instanceName == "handoff_to_code_expert")
     }
 
     @Test func handoffNameWithSpaces() {
-        let agent = AgentV3("Help.").named("billing support")
+        let agent = Agent("Help.").named("billing support")
         let handoff = Handoff(agent)
         #expect(handoff.instanceName == "handoff_to_billing_support")
     }
 
     @Test func handoffInToolBuilderIsCountedAsTool() {
-        let specialist = AgentV3("Specialist.").named("specialist")
-        let agent = AgentV3("Coordinator.") { Handoff(specialist) }
+        let specialist = Agent("Specialist.").named("specialist")
+        let agent = Agent("Coordinator.") { Handoff(specialist) }
         #expect(agent.tools.count == 1)
     }
 
     @Test func handoffBridgesToAnyJSONTool() {
-        let specialist = AgentV3("Specialist.").named("specialist")
+        let specialist = Agent("Specialist.").named("specialist")
         let handoff = Handoff(specialist)
         let jsonTool = handoff.toAnyJSONTool()
         #expect(jsonTool.name == "handoff_to_specialist")
@@ -30,13 +30,13 @@ struct HandoffToolTests {
     }
 
     @Test func handoffCustomDescription() {
-        let agent = AgentV3("Help.").named("billing")
+        let agent = Agent("Help.").named("billing")
         let handoff = Handoff(agent, description: "Route billing questions")
         #expect(handoff.handoffDescription == "Route billing questions")
     }
 
     @Test func handoffDefaultDescription() {
-        let agent = AgentV3("Help.").named("billing")
+        let agent = Agent("Help.").named("billing")
         let handoff = Handoff(agent)
         #expect(handoff.handoffDescription == "Transfer to billing")
     }

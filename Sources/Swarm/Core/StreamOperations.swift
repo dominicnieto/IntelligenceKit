@@ -243,7 +243,7 @@ public extension AsyncThrowingStream where Element == AgentEvent, Failure == Err
     /// Example:
     /// ```swift
     /// for try await thought in stream.mapToThoughts() {
-    ///     print("Agent thinking: \(thought)")
+    ///     print("LegacyAgent thinking: \(thought)")
     /// }
     /// ```
     func mapToThoughts() -> AsyncThrowingStream<String, Error> {

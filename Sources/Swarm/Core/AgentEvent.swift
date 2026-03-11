@@ -32,16 +32,16 @@ import Foundation
 public enum AgentEvent: Sendable {
     // MARK: - Lifecycle Events
 
-    /// Agent execution has started.
+    /// LegacyAgent execution has started.
     case started(input: String)
 
-    /// Agent execution has completed successfully.
+    /// LegacyAgent execution has completed successfully.
     case completed(result: AgentResult)
 
-    /// Agent execution failed with an error.
+    /// LegacyAgent execution failed with an error.
     case failed(error: AgentError)
 
-    /// Agent execution was cancelled.
+    /// LegacyAgent execution was cancelled.
     case cancelled
 
     /// Guardrail validation failed.
@@ -49,7 +49,7 @@ public enum AgentEvent: Sendable {
 
     // MARK: - Thinking Events
 
-    /// Agent is thinking/reasoning (ReAct "Thought" step).
+    /// LegacyAgent is thinking/reasoning (ReAct "Thought" step).
     case thinking(thought: String)
 
     /// Partial thought during streaming.
@@ -57,7 +57,7 @@ public enum AgentEvent: Sendable {
 
     // MARK: - Tool Events
 
-    /// Agent is calling a tool (ReAct "Action" step).
+    /// LegacyAgent is calling a tool (ReAct "Action" step).
     case toolCallStarted(call: ToolCall)
 
     /// Tool call arguments are being streamed (partial JSON fragments).
@@ -89,18 +89,18 @@ public enum AgentEvent: Sendable {
 
     // MARK: - Decision Events
 
-    /// Agent made a decision
+    /// LegacyAgent made a decision
     case decision(decision: String, options: [String]?)
 
-    /// Agent created or updated a plan
+    /// LegacyAgent created or updated a plan
     case planUpdated(plan: String, stepCount: Int)
 
     // MARK: - Handoff Events
 
-    /// Agent handoff initiated
+    /// LegacyAgent handoff initiated
     case handoffRequested(fromAgent: String, toAgent: String, reason: String?)
 
-    /// Agent handoff completed
+    /// LegacyAgent handoff completed
     case handoffCompleted(fromAgent: String, toAgent: String)
 
     /// A handoff to another agent started with input.

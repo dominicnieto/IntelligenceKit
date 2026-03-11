@@ -7,7 +7,7 @@ import Foundation
 
 /// A simple chat-only agent that calls an inference provider once per request.
 ///
-/// Unlike `ReActAgent` or `Agent`, `ChatAgent` does not invoke tools.
+/// Unlike `ReActAgent` or `LegacyAgent`, `ChatAgent` does not invoke tools.
 /// It is useful for the common "instructions + user input" chat pattern.
 public actor ChatAgent: AgentRuntime {
     // MARK: Public

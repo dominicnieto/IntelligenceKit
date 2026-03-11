@@ -6,7 +6,7 @@ import PlaygroundSupport
 
 PlaygroundSupport.PlaygroundPage.current.needsIndefiniteExecution = true
 
-struct ResearchAgent: Agent {
+struct ResearchAgent: LegacyAgent {
     var provider: any InferenceProvider {
         
     }
@@ -29,7 +29,7 @@ Task {
     print("Starting")
     do {
         let response = try await ResearchAgent().run("Hello").output
-        print("Agent Response: ", response)
+        print("LegacyAgent Response: ", response)
     } catch {
         print("Error: \(error)")
     }

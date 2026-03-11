@@ -25,7 +25,7 @@ import Foundation
 /// ```swift
 /// struct MyHooks: RunHooks {
 ///     func onAgentStart(context: AgentContext?, agent: any AgentRuntime, input: String) async {
-///         print("Agent started with: \(input)")
+///         print("LegacyAgent started with: \(input)")
 ///     }
 ///
 ///     func onToolStart(context: AgentContext?, agent: any AgentRuntime, tool: any Tool, arguments: [String: SendableValue])
@@ -44,7 +44,7 @@ public protocol RunHooks: Sendable {
     /// Called when an agent begins execution.
     ///
     /// - Parameters:
-    ///   - context: Agent context for orchestration scenarios. `nil` when the agent is run standalone
+    ///   - context: LegacyAgent context for orchestration scenarios. `nil` when the agent is run standalone
     ///     (directly via `agent.run()` rather than through an orchestrator like `SupervisorAgent`).
     ///   - agent: The agent that is starting.
     ///   - input: The input string passed to the agent.
@@ -422,7 +422,7 @@ public struct CompositeRunHooks: RunHooks {
 /// observability, and understanding agent execution flow.
 ///
 /// Log levels:
-/// - `.info`: Agent start/end, tool start/end, LLM start/end, handoff
+/// - `.info`: LegacyAgent start/end, tool start/end, LLM start/end, handoff
 /// - `.warning`: Guardrail triggered
 /// - `.error`: Error events
 ///
@@ -451,7 +451,7 @@ public struct LoggingRunHooks: RunHooks {
             ""
         }
         let truncatedInput = input.count > 100 ? String(input.prefix(100)) + "..." : input
-        Log.agents.info("Agent started\(contextId) - input: \"\(truncatedInput)\"")
+        Log.agents.info("LegacyAgent started\(contextId) - input: \"\(truncatedInput)\"")
     }
 
     public func onAgentEnd(context: AgentContext?, agent _: any AgentRuntime, result: AgentResult) async {
@@ -460,7 +460,7 @@ public struct LoggingRunHooks: RunHooks {
         } else {
             ""
         }
-        Log.agents.info("Agent completed\(contextId) - iterations: \(result.iterationCount), duration: \(result.duration), tools: \(result.toolCalls.count)")
+        Log.agents.info("LegacyAgent completed\(contextId) - iterations: \(result.iterationCount), duration: \(result.duration), tools: \(result.toolCalls.count)")
     }
 
     public func onError(context: AgentContext?, agent _: any AgentRuntime, error: Error) async {
@@ -469,7 +469,7 @@ public struct LoggingRunHooks: RunHooks {
         } else {
             ""
         }
-        Log.agents.error("Agent error\(contextId) - \(error.localizedDescription)")
+        Log.agents.error("LegacyAgent error\(contextId) - \(error.localizedDescription)")
     }
 
     public func onHandoff(context: AgentContext?, fromAgent: any AgentRuntime, toAgent: any AgentRuntime) async {
@@ -480,7 +480,7 @@ public struct LoggingRunHooks: RunHooks {
         }
         let fromName = agentDisplayName(fromAgent)
         let toName = agentDisplayName(toAgent)
-        Log.agents.info("Agent handoff\(contextId) - from: \(fromName) to: \(toName)")
+        Log.agents.info("LegacyAgent handoff\(contextId) - from: \(fromName) to: \(toName)")
     }
 
     public func onToolStart(context: AgentContext?, agent _: any AgentRuntime, call: ToolCall) async {
@@ -544,7 +544,7 @@ public struct LoggingRunHooks: RunHooks {
             ""
         }
         let truncatedThought = thought.count > 100 ? String(thought.prefix(100)) + "..." : thought
-        Log.agents.info("Agent thinking\(contextId): \"\(truncatedThought)\"")
+        Log.agents.info("LegacyAgent thinking\(contextId): \"\(truncatedThought)\"")
     }
 
     public func onOutputToken(context: AgentContext?, agent _: any AgentRuntime, token: String) async {
@@ -553,7 +553,7 @@ public struct LoggingRunHooks: RunHooks {
         } else {
             ""
         }
-        Log.agents.debug("Agent output token\(contextId): \"\(token)\"")
+        Log.agents.debug("LegacyAgent output token\(contextId): \"\(token)\"")
     }
 
     public func onIterationStart(context: AgentContext?, agent _: any AgentRuntime, number: Int) async {

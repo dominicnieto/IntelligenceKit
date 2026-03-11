@@ -110,10 +110,10 @@ struct SessionIntegrationTests {
             inferenceProvider: mockProvider2
         )
 
-        // Agent 1 processes first message
+        // LegacyAgent 1 processes first message
         _ = try await agent1.run("I need to calculate 2+2", session: sharedSession)
 
-        // Agent 2 uses the same session
+        // LegacyAgent 2 uses the same session
         _ = try await agent2.run("Please continue", session: sharedSession)
 
         // Verify session contains messages from both interactions
@@ -162,7 +162,7 @@ struct SessionIntegrationTests {
 
     // MARK: - Empty Session Tests
 
-    @Test("Agent works correctly with fresh empty session")
+    @Test("LegacyAgent works correctly with fresh empty session")
     func agentWorksWithEmptySession() async throws {
         // Setup
         let session = InMemorySession()
@@ -192,7 +192,7 @@ struct SessionIntegrationTests {
 
     // MARK: - Backward Compatibility Tests
 
-    @Test("Agent works without session parameter (backward compatibility)")
+    @Test("LegacyAgent works without session parameter (backward compatibility)")
     func agentWorksWithoutSession() async throws {
         // Setup
         let mockProvider = MockInferenceProvider(responses: [
@@ -213,7 +213,7 @@ struct SessionIntegrationTests {
         #expect(result.iterationCount == 1)
     }
 
-    @Test("Agent works with explicit nil session")
+    @Test("LegacyAgent works with explicit nil session")
     func agentWorksWithExplicitNilSession() async throws {
         // Setup
         let mockProvider = MockInferenceProvider(responses: [

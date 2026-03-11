@@ -113,7 +113,7 @@ extension ToolCallRecord: CustomDebugStringConvertible {
 ///
 /// Use `AgentResponse` when you need:
 /// - Unique response identification for logging or tracking
-/// - Agent attribution for multi-agent systems
+/// - LegacyAgent attribution for multi-agent systems
 /// - Detailed tool call records with results
 /// - Easy conversion to `AgentResult` for backward compatibility
 ///

@@ -77,7 +77,7 @@ private struct FallbackFailingAgent: AgentRuntime {
     func cancel() async {}
 }
 
-/// Agent that fails N times then succeeds.
+/// LegacyAgent that fails N times then succeeds.
 private final class FallbackCountingAgent: AgentRuntime, @unchecked Sendable {
     let tools: [any AnyJSONTool] = []
     let instructions = "Counting agent"
@@ -196,7 +196,7 @@ struct FallbackTests {
         )
 
         let result = try await step.execute("hello", context: context)
-        // Agent fails on attempts 1 and 2, succeeds on attempt 3
+        // LegacyAgent fails on attempts 1 and 2, succeeds on attempt 3
         #expect(result.output.contains("success on attempt 3"))
         #expect(countingAgent.callCount == 3)
     }
@@ -318,7 +318,7 @@ struct FallbackTests {
 
     @Test("Orchestration.run static convenience works")
     func orchestrationStaticRunConvenience() async throws {
-        let agent = FallbackEchoAgent(name: "Agent", prefix: "result")
+        let agent = FallbackEchoAgent(name: "LegacyAgent", prefix: "result")
 
         let workflow = Orchestration {
             agent
@@ -330,7 +330,7 @@ struct FallbackTests {
 
     @Test("Orchestration.stream static convenience works")
     func orchestrationStaticStreamConvenience() async throws {
-        let agent = FallbackEchoAgent(name: "Agent", prefix: "result")
+        let agent = FallbackEchoAgent(name: "LegacyAgent", prefix: "result")
 
         var lastResult: AgentResult?
         let workflow = Orchestration {
@@ -352,7 +352,7 @@ struct FallbackTests {
     @Test("ParallelBuilder auto-naming uses agent config name")
     func parallelBuilderAutoNaming() async throws {
         let namedAgent = FallbackEchoAgent(name: "NamedAgent", prefix: "named")
-        let defaultAgent = FallbackEchoAgent(name: "Agent", prefix: "default")
+        let defaultAgent = FallbackEchoAgent(name: "LegacyAgent", prefix: "default")
 
         let workflow = Orchestration {
             Parallel(merge: .structured) {

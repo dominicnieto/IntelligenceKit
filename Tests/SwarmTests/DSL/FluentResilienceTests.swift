@@ -1,7 +1,7 @@
 // FluentResilienceTests.swift
 // SwarmTests
 //
-// Tests for fluent resilience integration with Agent protocol.
+// Tests for fluent resilience integration with LegacyAgent protocol.
 
 import Foundation
 @testable import Swarm

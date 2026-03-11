@@ -112,7 +112,7 @@ public func |? (lhs: any AgentRuntime, rhs: any AgentRuntime) -> ConditionalFall
 public actor ParallelComposition: AgentRuntime {
     // MARK: Public
 
-    // MARK: - Agent Protocol (nonisolated)
+    // MARK: - LegacyAgent Protocol (nonisolated)
 
     nonisolated public let tools: [any AnyJSONTool] = []
     nonisolated public let instructions: String = "Parallel composition of agents"
@@ -164,7 +164,7 @@ public actor ParallelComposition: AgentRuntime {
         )
     }
 
-    // MARK: - Agent Protocol
+    // MARK: - LegacyAgent Protocol
 
     public func run(_ input: String, session: (any Session)? = nil, hooks: (any RunHooks)? = nil) async throws -> AgentResult {
         guard !parallelAgents.isEmpty else {
@@ -332,7 +332,7 @@ public actor ParallelComposition: AgentRuntime {
 public actor AgentSequence: AgentRuntime {
     // MARK: Public
 
-    // MARK: - Agent Protocol (nonisolated)
+    // MARK: - LegacyAgent Protocol (nonisolated)
 
     nonisolated public let tools: [any AnyJSONTool] = []
     nonisolated public let instructions: String = "Sequential composition of agents"
@@ -374,7 +374,7 @@ public actor AgentSequence: AgentRuntime {
         )
     }
 
-    // MARK: - Agent Protocol
+    // MARK: - LegacyAgent Protocol
 
     public func run(_ input: String, session: (any Session)? = nil, hooks: (any RunHooks)? = nil) async throws -> AgentResult {
         guard !sequentialAgents.isEmpty else {
@@ -466,7 +466,7 @@ public actor AgentSequence: AgentRuntime {
 public actor ConditionalFallback: AgentRuntime {
     // MARK: Public
 
-    // MARK: - Agent Protocol (nonisolated)
+    // MARK: - LegacyAgent Protocol (nonisolated)
 
     nonisolated public let tools: [any AnyJSONTool] = []
     nonisolated public let instructions: String = "Conditional fallback agent"
@@ -487,7 +487,7 @@ public actor ConditionalFallback: AgentRuntime {
         self.configuration = configuration
     }
 
-    // MARK: - Agent Protocol
+    // MARK: - LegacyAgent Protocol
 
     public func run(_ input: String, session: (any Session)? = nil, hooks: (any RunHooks)? = nil) async throws -> AgentResult {
         if isCancelled {

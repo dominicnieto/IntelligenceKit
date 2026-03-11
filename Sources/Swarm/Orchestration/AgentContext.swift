@@ -86,11 +86,11 @@ public protocol AgentContextProviding: Sendable {
 /// let context = AgentContext(input: "Analyze sales data")
 /// await context.set("department", value: .string("sales"))
 ///
-/// // Agent 1 runs
+/// // LegacyAgent 1 runs
 /// await context.recordExecution(agentName: "DataFetcher")
 /// await context.addMessage(.user("Fetch Q4 sales"))
 ///
-/// // Agent 2 runs
+/// // LegacyAgent 2 runs
 /// await context.recordExecution(agentName: "Analyzer")
 /// let path = await context.getExecutionPath()
 /// // ["DataFetcher", "Analyzer"]

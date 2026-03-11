@@ -1,16 +1,16 @@
 // Generate.swift
 // Swarm Framework
 //
-// Core LLM execution step for declarative `Agent` loops.
+// Core LLM execution step for declarative `LegacyAgent` loops.
 
 import Foundation
 
 @available(
     *,
     deprecated,
-    message: "Deprecated legacy loop DSL step. Prefer AgentBlueprint and embed a runtime AgentRuntime step for model turns (eventually the unified runtime Agent)."
+    message: "Deprecated legacy loop DSL step. Prefer AgentBlueprint and embed a runtime AgentRuntime step for model turns (eventually the unified runtime LegacyAgent)."
 )
-/// Executes the current `Agent`'s core model step.
+/// Executes the current `LegacyAgent`'s core model step.
 ///
 /// Place `Generate()` in an agent's `loop` to make the "model turn" explicit.
 /// The generated output becomes the next step's input.
@@ -19,7 +19,7 @@ public struct Generate: OrchestrationStep {
 
     public func execute(_ input: String, context: OrchestrationStepContext) async throws -> AgentResult {
         guard let orchestrator = context.orchestrator as? any _LoopOrchestrator else {
-            throw AgentError.internalError(reason: "Generate() can only be used inside an Agent loop")
+            throw AgentError.internalError(reason: "Generate() can only be used inside an LegacyAgent loop")
         }
 
         return try await orchestrator._generate(input, session: context.session, hooks: context.hooks)

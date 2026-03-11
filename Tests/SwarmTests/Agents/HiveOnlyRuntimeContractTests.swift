@@ -4,7 +4,7 @@ import Testing
 
 @Suite("Hive-Only Runtime Contract")
 struct HiveOnlyRuntimeContractTests {
-    @Test("Agent run records hive runtime metadata")
+    @Test("LegacyAgent run records hive runtime metadata")
     func agentRunRecordsHiveRuntimeMetadata() async throws {
         let provider = MockInferenceProvider()
         await provider.setToolCallResponses([
@@ -30,7 +30,7 @@ struct HiveOnlyRuntimeContractTests {
 
         let config = AgentConfiguration.default
 
-        let agent = try Agent(
+        let agent = try LegacyAgent(
             tools: [MockTool(name: "lookup", result: .string("resolved"))],
             instructions: "Use tools when needed.",
             configuration: config,
@@ -43,13 +43,13 @@ struct HiveOnlyRuntimeContractTests {
         #expect(result.metadata["runtime.engine"]?.stringValue == "hive")
     }
 
-    @Test("Agent stream completed result records hive runtime metadata")
+    @Test("LegacyAgent stream completed result records hive runtime metadata")
     func agentStreamCompletedResultRecordsHiveRuntimeMetadata() async throws {
         let provider = MockInferenceProvider(responses: ["Final answer"])
 
         let config = AgentConfiguration.default
 
-        let agent = try Agent(
+        let agent = try LegacyAgent(
             tools: [],
             instructions: "Return final answer.",
             configuration: config,
@@ -158,9 +158,9 @@ struct HiveOnlyRuntimeContractTests {
     func allCoreAgentRuntimesReportHiveInStreamCompletionMetadata() async throws {
         let config = AgentConfiguration.default
 
-        let agent = try Agent(
+        let agent = try LegacyAgent(
             tools: [],
-            instructions: "Agent",
+            instructions: "LegacyAgent",
             configuration: config,
             inferenceProvider: MockInferenceProvider(responses: ["agent-out"])
         )

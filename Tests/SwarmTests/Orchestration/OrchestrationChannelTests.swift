@@ -16,7 +16,7 @@ private struct TestPayload: Codable, Sendable, Equatable {
     let score: Int
 }
 
-/// Agent that writes to a channel via context.
+/// LegacyAgent that writes to a channel via context.
 private struct ChannelWriterAgent: AgentRuntime {
     let tools: [any AnyJSONTool] = []
     let instructions = "Writes to channel"

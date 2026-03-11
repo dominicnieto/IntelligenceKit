@@ -147,7 +147,7 @@ public macro Parameter(
 
 // MARK: - @AgentActor Macro
 
-/// Generates a complete Agent implementation from an actor with a process() method.
+/// Generates a complete LegacyAgent implementation from an actor with a process() method.
 ///
 /// ## Parameters
 /// - `instructions`: The system instructions for the agent (required).
@@ -185,10 +185,10 @@ public macro AgentActor(
     generateBuilder: Bool = true
 ) = #externalMacro(module: "SwarmMacros", type: "AgentMacro")
 
-/// A macro that generates Agent protocol conformance for an actor.
+/// A macro that generates LegacyAgent protocol conformance for an actor.
 ///
 /// The `@AgentActor` macro reduces boilerplate when creating agents by:
-/// - Generating all Agent protocol property requirements
+/// - Generating all LegacyAgent protocol property requirements
 /// - Creating a standard initializer
 /// - Implementing `run()`, `stream()`, and `cancel()` methods
 ///
@@ -234,7 +234,7 @@ public macro AgentActor(
 /// - `run(_ input:session:hooks:)` - Calls your `process()` method
 /// - `stream(_ input:session:hooks:)` - Wraps run() in tracked async stream
 /// - `cancel()` - Cancellation support
-/// - `Agent` conformance
+/// - `LegacyAgent` conformance
 ///
 /// ## Requirements
 ///
@@ -416,13 +416,13 @@ public struct PromptString: Sendable, ExpressibleByStringLiteral, ExpressibleByS
 @attached(member, names: arbitrary)
 public macro Builder() = #externalMacro(module: "SwarmMacros", type: "BuilderMacro")
 
-// MARK: - @AgentV3 Macro
+// MARK: - @Agent Macro
 
-/// A macro that generates an `AgentV3` factory method for a struct.
+/// A macro that generates an `Agent` factory method for a struct.
 ///
 /// Usage:
 /// ```swift
-/// @AgentV3("You are a helpful assistant.")
+/// @Agent("You are a helpful assistant.")
 /// struct HelperBot {
 ///     var tools: [any ToolV3] { [SearchTool()] }
 /// }
@@ -431,10 +431,10 @@ public macro Builder() = #externalMacro(module: "SwarmMacros", type: "BuilderMac
 /// let agent = HelperBot.makeAgent()
 /// ```
 ///
-/// Generates a `static func makeAgent() -> AgentV3` that creates an `AgentV3`
+/// Generates a `static func makeAgent() -> Agent` that creates an `Agent`
 /// with the given instructions and the struct's `tools` property (if present).
 @attached(member, names: named(makeAgent))
-public macro AgentV3(_ instructions: String) = #externalMacro(module: "SwarmMacros", type: "AgentV3Macro")
+public macro Agent(_ instructions: String) = #externalMacro(module: "SwarmMacros", type: "AgentV3Macro")
 
 // MARK: - PromptString String Interpolation
 

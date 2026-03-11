@@ -441,7 +441,7 @@ public struct RouteBuilder {
 public actor AgentRouter: AgentRuntime {
     // MARK: Public
 
-    // MARK: - Agent Protocol Properties
+    // MARK: - LegacyAgent Protocol Properties
 
     nonisolated public let tools: [any AnyJSONTool] = []
     nonisolated public let instructions: String
@@ -511,7 +511,7 @@ public actor AgentRouter: AgentRuntime {
         instructions = "Routes requests to specialized agents based on conditions."
     }
 
-    // MARK: - Agent Protocol Methods
+    // MARK: - LegacyAgent Protocol Methods
 
     /// Executes the router by finding a matching route and delegating to its agent.
     ///

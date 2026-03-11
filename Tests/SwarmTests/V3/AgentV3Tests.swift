@@ -1,10 +1,10 @@
 import Testing
 @testable import Swarm
 
-@Suite("AgentV3")
+@Suite("Agent")
 struct AgentV3Tests {
     @Test func agentCreatedWithInstructions() {
-        let agent = AgentV3("You are helpful.")
+        let agent = Agent("You are helpful.")
         #expect(agent.instructions == "You are helpful.")
         #expect(agent.tools.isEmpty)
         #expect(agent.name == "agent")
@@ -17,12 +17,12 @@ struct AgentV3Tests {
             func call() async throws -> String { "" }
             func toAnyJSONTool() -> any AnyJSONTool { fatalError() }
         }
-        let agent = AgentV3("Be helpful.") { FakeTool() }
+        let agent = Agent("Be helpful.") { FakeTool() }
         #expect(agent.tools.count == 1)
     }
 
     @Test func modifierChainProducesNewValue() {
-        let agent = AgentV3("Help.")
+        let agent = Agent("Help.")
             .named("assistant")
             .options(.precise)
             .memory(.conversation(limit: 20))
@@ -31,32 +31,32 @@ struct AgentV3Tests {
     }
 
     @Test func modifierChainIsImmutable() {
-        let original = AgentV3("Help.")
+        let original = Agent("Help.")
         let modified = original.named("modified")
         #expect(original.name == "agent")
         #expect(modified.name == "modified")
     }
 
     @Test func providerModifier() {
-        let agent = AgentV3("Help.")
+        let agent = Agent("Help.")
             .provider(MockInferenceProvider(responses: []))
         #expect(agent._provider != nil)
     }
 
     @Test func guardrailsModifier() {
-        let agent = AgentV3("Help.")
+        let agent = Agent("Help.")
             .guardrails(.inputNotEmpty, .maxInput(characters: 100))
         #expect(agent.guardrails.count == 2)
     }
 
     @Test func handoffsModifier() {
-        let specialist = AgentV3("Specialist.").named("specialist")
-        let agent = AgentV3("Router.").handoffs(specialist)
+        let specialist = Agent("Specialist.").named("specialist")
+        let agent = Agent("Router.").handoffs(specialist)
         #expect(agent.handoffAgents.count == 1)
     }
 
     @Test func makeRuntimeCreatesAgent() throws {
-        let agent = AgentV3("Be helpful.")
+        let agent = Agent("Be helpful.")
             .named("test-agent")
             .options(.precise)
             .provider(MockInferenceProvider(responses: []))
@@ -67,7 +67,7 @@ struct AgentV3Tests {
 
     @Test func agentRunProducesResult() async throws {
         let mock = MockInferenceProvider(responses: ["Hello world"])
-        let agent = AgentV3("Be helpful.").provider(mock)
+        let agent = Agent("Be helpful.").provider(mock)
         let result = try await agent.run("Say hello")
         #expect(result.output.contains("Hello"))
     }

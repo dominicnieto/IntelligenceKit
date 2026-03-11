@@ -9,7 +9,7 @@ import Testing
 
 // MARK: - AgentCompositionTests
 
-@Suite("Agent Composition Operator Tests")
+@Suite("LegacyAgent Composition Operator Tests")
 struct AgentCompositionTests {
     // MARK: - Parallel Composition (+)
 
@@ -18,8 +18,8 @@ struct AgentCompositionTests {
         let provider1 = MockInferenceProvider(responses: ["Final Answer: Result 1"])
         let provider2 = MockInferenceProvider(responses: ["Final Answer: Result 2"])
 
-        let agent1 = try ReActAgent(tools: [], instructions: "Agent 1", inferenceProvider: provider1)
-        let agent2 = try ReActAgent(tools: [], instructions: "Agent 2", inferenceProvider: provider2)
+        let agent1 = try ReActAgent(tools: [], instructions: "LegacyAgent 1", inferenceProvider: provider1)
+        let agent2 = try ReActAgent(tools: [], instructions: "LegacyAgent 2", inferenceProvider: provider2)
 
         let parallel = agent1 + agent2
 
@@ -35,9 +35,9 @@ struct AgentCompositionTests {
         let provider2 = MockInferenceProvider(responses: ["Final Answer: B"])
         let provider3 = MockInferenceProvider(responses: ["Final Answer: C"])
 
-        let agent1 = try ReActAgent(tools: [], instructions: "Agent 1", inferenceProvider: provider1)
-        let agent2 = try ReActAgent(tools: [], instructions: "Agent 2", inferenceProvider: provider2)
-        let agent3 = try ReActAgent(tools: [], instructions: "Agent 3", inferenceProvider: provider3)
+        let agent1 = try ReActAgent(tools: [], instructions: "LegacyAgent 1", inferenceProvider: provider1)
+        let agent2 = try ReActAgent(tools: [], instructions: "LegacyAgent 2", inferenceProvider: provider2)
+        let agent3 = try ReActAgent(tools: [], instructions: "LegacyAgent 3", inferenceProvider: provider3)
 
         let parallel = agent1 + agent2 + agent3
 
@@ -52,8 +52,8 @@ struct AgentCompositionTests {
         let provider1 = MockInferenceProvider(responses: ["Final Answer: First"])
         let provider2 = MockInferenceProvider(responses: ["Final Answer: Second"])
 
-        let agent1 = try ReActAgent(tools: [], instructions: "Agent 1", inferenceProvider: provider1)
-        let agent2 = try ReActAgent(tools: [], instructions: "Agent 2", inferenceProvider: provider2)
+        let agent1 = try ReActAgent(tools: [], instructions: "LegacyAgent 1", inferenceProvider: provider1)
+        let agent2 = try ReActAgent(tools: [], instructions: "LegacyAgent 2", inferenceProvider: provider2)
 
         let parallel = await (agent1 + agent2).withMergeStrategy(.concatenate(separator: " | "))
 
@@ -69,8 +69,8 @@ struct AgentCompositionTests {
         let provider1 = MockInferenceProvider(responses: ["Final Answer: Step 1 done"])
         let provider2 = MockInferenceProvider(responses: ["Final Answer: Step 2 done"])
 
-        let agent1 = try ReActAgent(tools: [], instructions: "Agent 1", inferenceProvider: provider1)
-        let agent2 = try ReActAgent(tools: [], instructions: "Agent 2", inferenceProvider: provider2)
+        let agent1 = try ReActAgent(tools: [], instructions: "LegacyAgent 1", inferenceProvider: provider1)
+        let agent2 = try ReActAgent(tools: [], instructions: "LegacyAgent 2", inferenceProvider: provider2)
 
         let sequential = agent1 >>> agent2
 
@@ -89,14 +89,14 @@ struct AgentCompositionTests {
         await provider2.setResponses(["Final Answer: Final result"])
 
         // Capture what agent2 receives
-        let agent1 = try ReActAgent(tools: [], instructions: "Agent 1", inferenceProvider: provider1)
-        let agent2 = try ReActAgent(tools: [], instructions: "Agent 2", inferenceProvider: provider2)
+        let agent1 = try ReActAgent(tools: [], instructions: "LegacyAgent 1", inferenceProvider: provider1)
+        let agent2 = try ReActAgent(tools: [], instructions: "LegacyAgent 2", inferenceProvider: provider2)
 
         let sequential = agent1 >>> agent2
 
         let result = try await sequential.run("Initial input")
 
-        // Agent 2 should have received Agent 1's output
+        // LegacyAgent 2 should have received LegacyAgent 1's output
         let provider2Calls = await provider2.generateCalls
         if let lastCall = provider2Calls.last {
             #expect(lastCall.prompt.contains("Intermediate result") || true) // Implementation dependent
@@ -109,9 +109,9 @@ struct AgentCompositionTests {
         let provider2 = MockInferenceProvider(responses: ["Final Answer: Step 2"])
         let provider3 = MockInferenceProvider(responses: ["Final Answer: Step 3"])
 
-        let agent1 = try ReActAgent(tools: [], instructions: "Agent 1", inferenceProvider: provider1)
-        let agent2 = try ReActAgent(tools: [], instructions: "Agent 2", inferenceProvider: provider2)
-        let agent3 = try ReActAgent(tools: [], instructions: "Agent 3", inferenceProvider: provider3)
+        let agent1 = try ReActAgent(tools: [], instructions: "LegacyAgent 1", inferenceProvider: provider1)
+        let agent2 = try ReActAgent(tools: [], instructions: "LegacyAgent 2", inferenceProvider: provider2)
+        let agent3 = try ReActAgent(tools: [], instructions: "LegacyAgent 3", inferenceProvider: provider3)
 
         let sequential = agent1 >>> agent2 >>> agent3
 
@@ -183,8 +183,8 @@ struct AgentCompositionTests {
         let provider1 = MockInferenceProvider(responses: ["Final Answer: A"])
         let provider2 = MockInferenceProvider(responses: ["Final Answer: B"])
 
-        let agent1 = try ReActAgent(tools: [], instructions: "Agent 1", inferenceProvider: provider1)
-        let agent2 = try ReActAgent(tools: [], instructions: "Agent 2", inferenceProvider: provider2)
+        let agent1 = try ReActAgent(tools: [], instructions: "LegacyAgent 1", inferenceProvider: provider1)
+        let agent2 = try ReActAgent(tools: [], instructions: "LegacyAgent 2", inferenceProvider: provider2)
 
         // Using existing --> operator should still work
         let chain = agent1 --> agent2
@@ -198,8 +198,8 @@ struct AgentCompositionTests {
         let provider1 = MockInferenceProvider(responses: ["Final Answer: X"])
         let provider2 = MockInferenceProvider(responses: ["Final Answer: Y"])
 
-        let agent1 = try ReActAgent(tools: [], instructions: "Agent 1", inferenceProvider: provider1)
-        let agent2 = try ReActAgent(tools: [], instructions: "Agent 2", inferenceProvider: provider2)
+        let agent1 = try ReActAgent(tools: [], instructions: "LegacyAgent 1", inferenceProvider: provider1)
+        let agent2 = try ReActAgent(tools: [], instructions: "LegacyAgent 2", inferenceProvider: provider2)
 
         let parallel = ParallelGroup(agents: [agent1, agent2])
 
@@ -215,9 +215,9 @@ struct AgentCompositionTests {
         let provider2 = MockInferenceProvider(responses: ["Final Answer: 2"])
         let provider3 = MockInferenceProvider(responses: ["Final Answer: 3"])
 
-        let agent1 = try ReActAgent(tools: [], instructions: "Agent 1", inferenceProvider: provider1)
-        let agent2 = try ReActAgent(tools: [], instructions: "Agent 2", inferenceProvider: provider2)
-        let agent3 = try ReActAgent(tools: [], instructions: "Agent 3", inferenceProvider: provider3)
+        let agent1 = try ReActAgent(tools: [], instructions: "LegacyAgent 1", inferenceProvider: provider1)
+        let agent2 = try ReActAgent(tools: [], instructions: "LegacyAgent 2", inferenceProvider: provider2)
+        let agent3 = try ReActAgent(tools: [], instructions: "LegacyAgent 3", inferenceProvider: provider3)
 
         // a + b >>> c should be a + (b >>> c) due to precedence
         // But we might want (a + b) >>> c

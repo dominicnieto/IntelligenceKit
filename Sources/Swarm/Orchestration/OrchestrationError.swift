@@ -9,7 +9,7 @@ import Foundation
 
 /// Errors that can occur during multi-agent orchestration.
 public enum OrchestrationError: Error, Sendable, Equatable {
-    // MARK: - Agent Registration Errors
+    // MARK: - LegacyAgent Registration Errors
 
     /// An agent with the given name was not found in the orchestrator.
     case agentNotFound(name: String)
@@ -19,10 +19,10 @@ public enum OrchestrationError: Error, Sendable, Equatable {
 
     // MARK: - Handoff Errors
 
-    /// Agent handoff failed between source and target agents.
+    /// LegacyAgent handoff failed between source and target agents.
     case handoffFailed(source: String, target: String, reason: String)
 
-    /// Agent handoff was skipped because it was disabled.
+    /// LegacyAgent handoff was skipped because it was disabled.
     case handoffSkipped(from: String, to: String, reason: String)
 
     // MARK: - Routing Errors
@@ -68,7 +68,7 @@ extension OrchestrationError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case let .agentNotFound(name):
-            return "Agent not found: \(name)"
+            return "LegacyAgent not found: \(name)"
         case .noAgentsConfigured:
             return "No agents configured in orchestrator"
         case let .handoffFailed(source, target, reason):

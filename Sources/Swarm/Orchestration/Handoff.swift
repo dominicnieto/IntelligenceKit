@@ -1,7 +1,7 @@
 // Handoff.swift
 // Swarm Framework
 //
-// Agent handoff system for multi-agent orchestration.
+// LegacyAgent handoff system for multi-agent orchestration.
 
 import Foundation
 
@@ -127,12 +127,12 @@ public struct HandoffResult: Sendable, Equatable {
 /// control being transferred to them by other agents, including
 /// receiving context and input from the source agent.
 ///
-/// This protocol extends `Agent`, adding specialized handoff handling
+/// This protocol extends `LegacyAgent`, adding specialized handoff handling
 /// while maintaining compatibility with standard agent execution.
 ///
 /// Example:
 /// ```swift
-/// struct ExecutorAgent: Agent, HandoffReceiver {
+/// struct ExecutorAgent: LegacyAgent, HandoffReceiver {
 ///     let tools: [any Tool] = []
 ///     let instructions = "Execute tasks"
 ///     let configuration = AgentConfiguration.default
@@ -263,7 +263,7 @@ public actor HandoffCoordinator {
     /// Creates a new handoff coordinator.
     public init() {}
 
-    // MARK: - Agent Registration
+    // MARK: - LegacyAgent Registration
 
     /// Registers an agent with a specific name.
     ///
@@ -331,10 +331,10 @@ public actor HandoffCoordinator {
         let result: AgentResult
 
         if let handoffReceiver = targetAgent as? HandoffReceiver {
-            // Agent implements HandoffReceiver, use specialized handling
+            // LegacyAgent implements HandoffReceiver, use specialized handling
             result = try await handoffReceiver.handleHandoff(request, context: context)
         } else {
-            // Agent doesn't implement HandoffReceiver, use standard execution
+            // LegacyAgent doesn't implement HandoffReceiver, use standard execution
             // Merge context manually
             for (key, value) in request.context {
                 await context.set(key, value: value)
@@ -480,10 +480,10 @@ public actor HandoffCoordinator {
         )
 
         if let handoffReceiver = targetAgent as? HandoffReceiver {
-            // Agent implements HandoffReceiver, use specialized handling
+            // LegacyAgent implements HandoffReceiver, use specialized handling
             result = try await handoffReceiver.handleHandoff(effectiveRequest, context: context)
         } else {
-            // Agent doesn't implement HandoffReceiver, use standard execution
+            // LegacyAgent doesn't implement HandoffReceiver, use standard execution
             // Merge context manually
             for (key, value) in effectiveContext {
                 await context.set(key, value: value)

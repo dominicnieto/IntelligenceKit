@@ -9,7 +9,7 @@ import Testing
 
 // MARK: - Test Helpers
 
-/// Agent that returns a configurable output string.
+/// LegacyAgent that returns a configurable output string.
 private struct OutputAgent: AgentRuntime {
     let outputText: String
     let tools: [any AnyJSONTool] = []
@@ -44,7 +44,7 @@ private struct OutputAgent: AgentRuntime {
     func cancel() async {}
 }
 
-/// Agent that always throws an error.
+/// LegacyAgent that always throws an error.
 private struct ErrorAgent: AgentRuntime {
     let tools: [any AnyJSONTool] = []
     let instructions = "Error agent"

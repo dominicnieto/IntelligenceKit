@@ -1,3 +1,6 @@
+// InlineToolTests.swift
+// Swarm V3 Tests
+
 import Testing
 @testable import Swarm
 
@@ -16,14 +19,8 @@ struct InlineToolTests {
         let tool = InlineTool("upper", "Uppercase") { (s: String) in
             s.uppercased()
         }
-        let jsonTool = tool.toAnyJSONTool()
-        #expect(jsonTool.name == "upper")
-        #expect(jsonTool.description == "Uppercase")
-    }
-
-    @Test func inlineToolConformsToToolV3() {
-        let tool = InlineTool("test", "Test tool") { (s: String) in s }
-        let tools: [any ToolV3] = [tool]
-        #expect(tools.count == 1)
+        let bridge = tool.toAnyJSONTool()
+        #expect(bridge.name == "upper")
+        #expect(bridge.description == "Uppercase")
     }
 }

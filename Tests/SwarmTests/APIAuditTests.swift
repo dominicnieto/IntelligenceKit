@@ -190,33 +190,33 @@ final class APIAuditTests: XCTestCase {
         }
     }
 
-    // MARK: - Agent Name Convenience Init Tests
+    // MARK: - LegacyAgent Name Convenience Init Tests
 
     func testAgentNameConvenienceInit() async throws {
-        let agent = try Agent(name: "TestAgent", instructions: "You are helpful.")
+        let agent = try LegacyAgent(name: "TestAgent", instructions: "You are helpful.")
         let name = await agent.configuration.name
         XCTAssertEqual(name, "TestAgent")
     }
 
     func testAgentNameConvenienceInitPreservesInstructions() async throws {
-        let agent = try Agent(name: "Helper", instructions: "Be concise.")
+        let agent = try LegacyAgent(name: "Helper", instructions: "Be concise.")
         let instructions = await agent.instructions
         XCTAssertEqual(instructions, "Be concise.")
     }
 
     func testAgentNameAccessedViaRuntimeProperty() async throws {
-        let agent = try Agent(name: "RuntimeName", instructions: "test")
+        let agent = try LegacyAgent(name: "RuntimeName", instructions: "test")
         let name = await agent.name
         XCTAssertEqual(name, "RuntimeName")
     }
 
-    // MARK: - Agent handoffAgents Init Tests
+    // MARK: - LegacyAgent handoffAgents Init Tests
 
     func testAgentHandoffAgentsInit() async throws {
-        let billing = try Agent(name: "Billing", instructions: "Handle billing")
-        let support = try Agent(name: "Support", instructions: "Handle support")
+        let billing = try LegacyAgent(name: "Billing", instructions: "Handle billing")
+        let support = try LegacyAgent(name: "Support", instructions: "Handle support")
 
-        let triage = try Agent(
+        let triage = try LegacyAgent(
             name: "Triage",
             instructions: "Route requests",
             handoffAgents: [billing, support]
@@ -227,8 +227,8 @@ final class APIAuditTests: XCTestCase {
     }
 
     func testAgentHandoffAgentsTargetsCorrectAgents() async throws {
-        let billing = try Agent(name: "Billing", instructions: "Handle billing")
-        let triage = try Agent(
+        let billing = try LegacyAgent(name: "Billing", instructions: "Handle billing")
+        let triage = try LegacyAgent(
             name: "Triage",
             instructions: "Route requests",
             handoffAgents: [billing]
@@ -242,7 +242,7 @@ final class APIAuditTests: XCTestCase {
     // MARK: - AgentTool Tests
 
     func testAgentToolCreation() async throws {
-        let innerAgent = try Agent(
+        let innerAgent = try LegacyAgent(
             name: "Researcher",
             instructions: "Research topics",
             inferenceProvider: MockInferenceProvider()
@@ -257,7 +257,7 @@ final class APIAuditTests: XCTestCase {
     }
 
     func testAgentToolCustomNameAndDescription() async throws {
-        let innerAgent = try Agent(
+        let innerAgent = try LegacyAgent(
             name: "Worker",
             instructions: "Work",
             inferenceProvider: MockInferenceProvider()
@@ -274,7 +274,7 @@ final class APIAuditTests: XCTestCase {
     }
 
     func testAgentAsToolExtension() async throws {
-        let agent = try Agent(
+        let agent = try LegacyAgent(
             name: "Helper",
             instructions: "Help users",
             inferenceProvider: MockInferenceProvider()
@@ -286,7 +286,7 @@ final class APIAuditTests: XCTestCase {
     }
 
     func testAgentAsToolWithCustomParams() async throws {
-        let agent = try Agent(
+        let agent = try LegacyAgent(
             name: "Helper",
             instructions: "Help users",
             inferenceProvider: MockInferenceProvider()
@@ -301,7 +301,7 @@ final class APIAuditTests: XCTestCase {
         let mock = MockInferenceProvider()
         await mock.setResponses(["Final Answer: done"])
 
-        let innerAgent = try Agent(
+        let innerAgent = try LegacyAgent(
             name: "Worker",
             instructions: "Work",
             inferenceProvider: mock
@@ -321,7 +321,7 @@ final class APIAuditTests: XCTestCase {
 
     func testAgentRuntimeNameDefaultsToConfigName() async throws {
         let config = AgentConfiguration(name: "ConfiguredName")
-        let agent = try Agent(
+        let agent = try LegacyAgent(
             instructions: "test",
             configuration: config,
             inferenceProvider: MockInferenceProvider()
@@ -332,19 +332,19 @@ final class APIAuditTests: XCTestCase {
     }
 
     func testAgentRuntimeNameDefaultName() async throws {
-        let agent = try Agent(
+        let agent = try LegacyAgent(
             instructions: "test",
             inferenceProvider: MockInferenceProvider()
         )
-        // Default configuration name is "Agent"
+        // Default configuration name is "LegacyAgent"
         let name = await agent.name
-        XCTAssertEqual(name, "Agent")
+        XCTAssertEqual(name, "LegacyAgent")
     }
 
     // MARK: - AgentRuntime.asHandoff() Tests
 
     func testAgentAsHandoffReturnsCorrectTarget() async throws {
-        let agent = try Agent(
+        let agent = try LegacyAgent(
             name: "Billing",
             instructions: "Handle billing",
             inferenceProvider: MockInferenceProvider()
@@ -355,7 +355,7 @@ final class APIAuditTests: XCTestCase {
     }
 
     func testAgentAsHandoffWithCustomToolName() async throws {
-        let agent = try Agent(
+        let agent = try LegacyAgent(
             name: "Support",
             instructions: "Handle support",
             inferenceProvider: MockInferenceProvider()
@@ -371,7 +371,7 @@ final class APIAuditTests: XCTestCase {
     }
 
     func testAgentAsHandoffDefaultsNilOverrides() async throws {
-        let agent = try Agent(
+        let agent = try LegacyAgent(
             name: "Worker",
             instructions: "Work",
             inferenceProvider: MockInferenceProvider()

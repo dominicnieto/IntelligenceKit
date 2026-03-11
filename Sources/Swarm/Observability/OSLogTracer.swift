@@ -21,7 +21,7 @@
     /// ## Features
     ///
     /// - **Unified Logging**: Events are logged to Apple's unified logging system
-    /// - **Signpost Intervals**: Agent and tool executions create signpost intervals for Instruments
+    /// - **Signpost Intervals**: LegacyAgent and tool executions create signpost intervals for Instruments
     /// - **Configurable Filtering**: Set minimum log level to reduce noise
     /// - **Subsystem Organization**: Events are organized by subsystem and category
     ///
@@ -211,8 +211,8 @@
 
             switch event.kind {
             case .agentStart:
-                name = "Agent Execution"
-                description = event.agentName ?? "Unknown Agent"
+                name = "LegacyAgent Execution"
+                description = event.agentName ?? "Unknown LegacyAgent"
             case .toolCall:
                 name = "Tool Execution"
                 description = event.toolName ?? "Unknown Tool"
@@ -240,7 +240,7 @@
             case .agentCancelled,
                  .agentComplete,
                  .agentError:
-                name = "Agent Execution"
+                name = "LegacyAgent Execution"
                 description = event.message
             case .toolError,
                  .toolResult:

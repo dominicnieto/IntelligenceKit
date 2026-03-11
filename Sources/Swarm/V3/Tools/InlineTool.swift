@@ -1,16 +1,19 @@
-/// Closure-based one-off tool. Wraps a typed closure into `ToolV3` + `AnyJSONTool`.
-///
-/// ```swift
-/// let reverse = InlineTool("reverse", "Reverse a string") { (s: String) in
-///     String(s.reversed())
-/// }
-/// ```
+// InlineTool.swift
+// Swarm V3 API
+//
+// Closure-based one-off tool for inline definitions.
+
+import Foundation
+
+// MARK: - InlineTool
+
+/// A closure-based tool for one-off definitions without a dedicated struct.
 public struct InlineTool<Input: Codable & Sendable>: ToolV3 {
     public let toolName: String
     public let toolDescription: String
     private let _execute: @Sendable (Input) async throws -> String
 
-    // Static properties required by ToolV3 — instance-level names used instead
+    // Static conformance (instance-level names used at runtime)
     public static var name: String { "" }
     public static var description: String { "" }
 
@@ -24,16 +27,21 @@ public struct InlineTool<Input: Codable & Sendable>: ToolV3 {
         self._execute = execute
     }
 
+    /// Execute with typed input.
     public func execute(input: Input) async throws -> String {
         try await _execute(input)
     }
 
+    /// ToolV3 conformance — not called directly for InlineTool.
     public func call() async throws -> String {
         fatalError("InlineTool.call() requires typed input — use execute(input:)")
     }
 
     public func toAnyJSONTool() -> any AnyJSONTool {
-        InlineAnyJSONTool(name: toolName, description: toolDescription) { args in
+        InlineAnyJSONTool(
+            name: toolName,
+            description: toolDescription
+        ) { args in
             guard let first = args.values.first, case .string(let s) = first else {
                 throw AgentError.toolExecutionFailed(
                     toolName: self.toolName,
@@ -47,7 +55,8 @@ public struct InlineTool<Input: Codable & Sendable>: ToolV3 {
     }
 }
 
-/// Internal bridge: `AnyJSONTool` backed by a closure.
+// MARK: - InlineAnyJSONTool (internal bridge)
+
 struct InlineAnyJSONTool: AnyJSONTool {
     let name: String
     let description: String

@@ -13,7 +13,7 @@ struct MembraneIntegrationTests {
 
         let session = try await makeLargeSession()
         let tools = makeTestTools(count: 30)
-        let agent = try Agent(
+        let agent = try LegacyAgent(
             tools: tools,
             instructions: longBlock("instructions", lines: 220),
             configuration: AgentConfiguration(
@@ -65,7 +65,7 @@ struct MembraneIntegrationTests {
         ])
 
         let tools = [MembraneTestTool(name: "runtime_test_tool")]
-        let agent = try Agent(
+        let agent = try LegacyAgent(
             tools: tools,
             instructions: "Runtime flags test",
             configuration: AgentConfiguration(
@@ -108,7 +108,7 @@ struct MembraneIntegrationTests {
     func membraneThrowFallsBackWithoutCrash() async throws {
         let provider = MockInferenceProvider(responses: ["fallback-ok"])
         let throwingAdapter = ThrowingMembraneAdapter()
-        let agent = try Agent(
+        let agent = try LegacyAgent(
             tools: [],
             instructions: "Fallback test",
             configuration: AgentConfiguration(

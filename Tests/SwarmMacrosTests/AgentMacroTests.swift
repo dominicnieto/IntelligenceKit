@@ -20,7 +20,7 @@ import XCTest
 // MARK: - AgentMacroTests
 
 final class AgentMacroTests: XCTestCase {
-    // MARK: - Basic Agent Tests
+    // MARK: - Basic LegacyAgent Tests
 
     // swiftlint:disable:next function_body_length
     func testBasicAgentExpansion() throws {
@@ -629,7 +629,7 @@ extension AgentMacroTests {
     // swiftlint:disable:next function_body_length
     func testAgentWithoutProcessMethod() throws {
         #if canImport(SwarmMacros)
-            // Agent without process method should still compile but run() throws
+            // LegacyAgent without process method should still compile but run() throws
             assertMacroExpansion(
                 """
                 @AgentActor("No process method")

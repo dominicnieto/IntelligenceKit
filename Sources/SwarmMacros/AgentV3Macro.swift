@@ -2,15 +2,15 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 
-/// The `@AgentV3` macro generates an `AgentV3` factory for a struct.
+/// The `@Agent` macro generates an `Agent` factory for a struct.
 ///
 /// Usage:
 /// ```swift
-/// @AgentV3("You are a helper.")
+/// @Agent("You are a helper.")
 /// struct HelperBot {
 ///     var tools: [any ToolV3] { [SearchTool()] }
 /// }
-/// // Generates: static func makeAgent() -> AgentV3
+/// // Generates: static func makeAgent() -> Agent
 /// ```
 public struct AgentV3Macro: MemberMacro {
     public static func expansion(
@@ -52,9 +52,9 @@ public struct AgentV3Macro: MemberMacro {
         let factoryBody: DeclSyntax
         if hasTools {
             factoryBody = """
-                static func makeAgent() -> AgentV3 {
+                static func makeAgent() -> Agent {
                     let instance = \(raw: typeName)()
-                    return AgentV3("\(raw: instructions)") {
+                    return Agent("\(raw: instructions)") {
                         for tool in instance.tools {
                             tool
                         }
@@ -63,8 +63,8 @@ public struct AgentV3Macro: MemberMacro {
                 """
         } else {
             factoryBody = """
-                static func makeAgent() -> AgentV3 {
-                    AgentV3("\(raw: instructions)")
+                static func makeAgent() -> Agent {
+                    Agent("\(raw: instructions)")
                 }
                 """
         }
@@ -80,9 +80,9 @@ enum AgentV3MacroError: Error, CustomStringConvertible {
     var description: String {
         switch self {
         case .missingInstructions:
-            return "@AgentV3 requires an instructions string argument"
+            return "@Agent requires an instructions string argument"
         case .onlyApplicableToStruct:
-            return "@AgentV3 can only be applied to structs"
+            return "@Agent can only be applied to structs"
         }
     }
 }

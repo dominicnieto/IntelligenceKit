@@ -1,7 +1,7 @@
 import Testing
 @testable import Swarm
 
-@Suite("Agent ConduitProviderSelection Streaming")
+@Suite("LegacyAgent ConduitProviderSelection Streaming")
 struct AgentConduitProviderSelectionStreamingTests {
     @Test("Uses tool-call streaming when provider is wrapped in ConduitProviderSelection")
     func usesToolStreamingThroughProviderSelectionWrapper() async throws {
@@ -36,7 +36,7 @@ struct AgentConduitProviderSelectionStreamingTests {
                 tools _: [ToolSchema],
                 options _: InferenceOptions
             ) async throws -> InferenceResponse {
-                // If this is called, Agent did not take the streaming tool-call path.
+                // If this is called, LegacyAgent did not take the streaming tool-call path.
                 throw AgentError.generationFailed(reason: "Unexpected call to generateWithToolCalls() in provider-selection streaming test")
             }
 
@@ -70,7 +70,7 @@ struct AgentConduitProviderSelectionStreamingTests {
         let provider = ScriptedStreamingProvider()
         let wrapped: ConduitProviderSelection = .provider(provider)
 
-        let agent = try Agent(
+        let agent = try LegacyAgent(
             tools: [EchoTool()],
             configuration: .default.maxIterations(3),
             inferenceProvider: wrapped

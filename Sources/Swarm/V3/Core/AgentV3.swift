@@ -3,7 +3,7 @@ import Foundation
 /// THE agent type for V3 API. Struct (value type), ONE init, modifier chain.
 ///
 /// ```swift
-/// let agent = AgentV3("You are a helpful assistant.") {
+/// let agent = Agent("You are a helpful assistant.") {
 ///     SearchTool()
 ///     CalculatorTool()
 /// }
@@ -12,14 +12,14 @@ import Foundation
 /// .memory(.conversation(limit: 50))
 /// .provider(myProvider)
 /// ```
-public struct AgentV3: Sendable {
+public struct Agent: Sendable {
     public let instructions: String
     public let tools: [any ToolV3]
     public let name: String
     public let options: RunOptions
     public let memoryOption: MemoryOption
     public let guardrails: [GuardrailSpec]
-    public let handoffAgents: [AgentV3]
+    public let handoffAgents: [Agent]
     let _provider: (any InferenceProvider)?
 
     /// Create an agent. This is the ONLY public init.
@@ -45,7 +45,7 @@ public struct AgentV3: Sendable {
         options: RunOptions,
         memoryOption: MemoryOption,
         guardrails: [GuardrailSpec],
-        handoffAgents: [AgentV3],
+        handoffAgents: [Agent],
         provider: (any InferenceProvider)?
     ) {
         self.instructions = instructions
@@ -61,49 +61,49 @@ public struct AgentV3: Sendable {
 
 // MARK: - Modifier Chain
 
-extension AgentV3 {
-    public func named(_ name: String) -> AgentV3 {
-        AgentV3(
+extension Agent {
+    public func named(_ name: String) -> Agent {
+        Agent(
             instructions: instructions, tools: tools, name: name,
             options: options, memoryOption: memoryOption, guardrails: guardrails,
             handoffAgents: handoffAgents, provider: _provider
         )
     }
 
-    public func options(_ options: RunOptions) -> AgentV3 {
-        AgentV3(
+    public func options(_ options: RunOptions) -> Agent {
+        Agent(
             instructions: instructions, tools: tools, name: name,
             options: options, memoryOption: memoryOption, guardrails: guardrails,
             handoffAgents: handoffAgents, provider: _provider
         )
     }
 
-    public func memory(_ memory: MemoryOption) -> AgentV3 {
-        AgentV3(
+    public func memory(_ memory: MemoryOption) -> Agent {
+        Agent(
             instructions: instructions, tools: tools, name: name,
             options: options, memoryOption: memory, guardrails: guardrails,
             handoffAgents: handoffAgents, provider: _provider
         )
     }
 
-    public func guardrails(_ guardrails: GuardrailSpec...) -> AgentV3 {
-        AgentV3(
+    public func guardrails(_ guardrails: GuardrailSpec...) -> Agent {
+        Agent(
             instructions: instructions, tools: tools, name: name,
             options: options, memoryOption: memoryOption, guardrails: guardrails,
             handoffAgents: handoffAgents, provider: _provider
         )
     }
 
-    public func handoffs(_ agents: AgentV3...) -> AgentV3 {
-        AgentV3(
+    public func handoffs(_ agents: Agent...) -> Agent {
+        Agent(
             instructions: instructions, tools: tools, name: name,
             options: options, memoryOption: memoryOption, guardrails: guardrails,
             handoffAgents: agents, provider: _provider
         )
     }
 
-    public func provider(_ provider: some InferenceProvider) -> AgentV3 {
-        AgentV3(
+    public func provider(_ provider: some InferenceProvider) -> Agent {
+        Agent(
             instructions: instructions, tools: tools, name: name,
             options: options, memoryOption: memoryOption, guardrails: guardrails,
             handoffAgents: handoffAgents, provider: provider
@@ -111,9 +111,9 @@ extension AgentV3 {
     }
 }
 
-// MARK: - Execution (Bridge to existing Agent actor)
+// MARK: - Execution (Bridge to existing LegacyAgent actor)
 
-extension AgentV3 {
+extension Agent {
     /// Run the agent with the given input. Returns the final result.
     public func run(_ input: String) async throws -> AgentResult {
         let runtime = try makeRuntime()
@@ -128,9 +128,9 @@ extension AgentV3 {
         return runtime.stream(input)
     }
 
-    /// Bridge: creates an internal `Agent` actor from V3 config.
-    /// This is the temporary bridge — replaced in Phase 11 when AgentV3 becomes canonical.
-    func makeRuntime() throws -> Agent {
+    /// Bridge: creates an internal `LegacyAgent` actor from V3 config.
+    /// This is the temporary bridge — replaced in Phase 11 when Agent becomes canonical.
+    func makeRuntime() throws -> LegacyAgent {
         let config = AgentConfiguration(
             name: name,
             maxIterations: options.maxIterations,
@@ -138,7 +138,7 @@ extension AgentV3 {
             maxTokens: options.maxTokens
         )
 
-        return try Agent(
+        return try LegacyAgent(
             tools: tools.map { $0.toAnyJSONTool() },
             instructions: instructions,
             configuration: config,

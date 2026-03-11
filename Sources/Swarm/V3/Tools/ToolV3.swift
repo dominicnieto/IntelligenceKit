@@ -1,13 +1,13 @@
+// ToolV3.swift
+// Swarm V3 API
+//
+// User-facing tool protocol and @ParameterV3 property wrapper.
+
+import Foundation
+
 // MARK: - @ParameterV3
 
 /// Property wrapper for declaring tool parameters with descriptions.
-///
-/// ```swift
-/// struct GreetTool: ToolV3 {
-///     @ParameterV3("Name of the person") var name: String = ""
-///     func call() async throws -> String { "Hello, \(name)!" }
-/// }
-/// ```
 @propertyWrapper
 public struct ParameterV3<Value: Sendable>: Sendable {
     public var wrappedValue: Value
@@ -28,13 +28,17 @@ extension ParameterV3 where Value: ExpressibleByNilLiteral {
 
 // MARK: - ToolV3
 
-/// User-facing tool protocol for V3 API. No associated types — safe as existential `[any ToolV3]`.
-///
-/// Implement `toAnyJSONTool()` to bridge into the existing `AgentRuntime` wire protocol.
-/// The `@Tool` macro generates this bridge automatically.
+/// User-facing tool protocol. No associated types — safe as existential `[any ToolV3]`.
 public protocol ToolV3: Sendable {
+    /// The unique name of this tool.
     static var name: String { get }
+
+    /// Human-readable description.
     static var description: String { get }
+
+    /// Execute the tool and return a string result.
     func call() async throws -> String
+
+    /// Bridge to the existing AnyJSONTool wire protocol.
     func toAnyJSONTool() -> any AnyJSONTool
 }

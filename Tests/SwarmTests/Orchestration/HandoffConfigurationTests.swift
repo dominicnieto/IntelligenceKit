@@ -567,7 +567,7 @@ struct HandoffConfigurationLookupTests {
 
     @Test("returns nil for empty sequence")
     func returnsNilForEmptySequence() {
-        let agent = MockHandoffAgent(name: "Agent")
+        let agent = MockHandoffAgent(name: "LegacyAgent")
         let empty: [AnyHandoffConfiguration] = []
 
         let found = empty.handoffConfiguration(for: agent)
@@ -577,7 +577,7 @@ struct HandoffConfigurationLookupTests {
 
     @Test("returns first match when multiple configurations target the same agent")
     func returnsFirstMatchForDuplicateTargets() {
-        let agent = MockHandoffAgent(name: "Agent")
+        let agent = MockHandoffAgent(name: "LegacyAgent")
         let first = AnyHandoffConfiguration(targetAgent: agent, toolNameOverride: "first_tool")
         let second = AnyHandoffConfiguration(targetAgent: agent, toolNameOverride: "second_tool")
         let configurations = [first, second]

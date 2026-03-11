@@ -347,7 +347,7 @@ public actor ParallelGroup: AgentRuntime {
     /// The agents in this parallel group with their names.
     nonisolated public let agents: [(name: String, agent: any AgentRuntime)]
 
-    // MARK: - Agent Protocol Properties (nonisolated)
+    // MARK: - LegacyAgent Protocol Properties (nonisolated)
 
     nonisolated public var tools: [any AnyJSONTool] { [] }
 
@@ -371,7 +371,7 @@ public actor ParallelGroup: AgentRuntime {
     ///   - mergeStrategy: Strategy for merging results. Default: Concatenate()
     ///   - shouldContinueOnError: Whether to continue if some agents fail. Default: true
     ///   - maxConcurrency: Maximum concurrent agents. Default: nil (unlimited)
-    ///   - configuration: Agent configuration. Default: .default
+    ///   - configuration: LegacyAgent configuration. Default: .default
     public init(
         agents: [(name: String, agent: any AgentRuntime)],
         mergeStrategy: any ResultMergeStrategy = MergeStrategies.Concatenate(),
@@ -388,14 +388,14 @@ public actor ParallelGroup: AgentRuntime {
 
     /// Convenience initializer that auto-generates agent names.
     ///
-    /// Agent names will be "agent_0", "agent_1", etc.
+    /// LegacyAgent names will be "agent_0", "agent_1", etc.
     ///
     /// - Parameters:
     ///   - agents: Array of agents.
     ///   - mergeStrategy: Strategy for merging results. Default: Concatenate()
     ///   - shouldContinueOnError: Whether to continue if some agents fail. Default: true
     ///   - maxConcurrency: Maximum concurrent agents. Default: nil (unlimited)
-    ///   - configuration: Agent configuration. Default: .default
+    ///   - configuration: LegacyAgent configuration. Default: .default
     public init(
         agents: [any AgentRuntime],
         mergeStrategy: any ResultMergeStrategy = MergeStrategies.Concatenate(),
@@ -421,7 +421,7 @@ public actor ParallelGroup: AgentRuntime {
     ///   - mergeStrategy: Strategy for merging results. Default: Concatenate()
     ///   - continueOnError: Whether to continue if some agents fail. Default: false
     ///   - maxConcurrency: Maximum concurrent agents. Default: nil (unlimited)
-    ///   - configuration: Agent configuration. Default: .default
+    ///   - configuration: LegacyAgent configuration. Default: .default
     @available(*, deprecated, message: "Use shouldContinueOnError instead of continueOnError")
     public init(
         agents: [(name: String, agent: any AgentRuntime)],
@@ -446,7 +446,7 @@ public actor ParallelGroup: AgentRuntime {
     ///   - mergeStrategy: Strategy for merging results. Default: Concatenate()
     ///   - continueOnError: Whether to continue if some agents fail. Default: false
     ///   - maxConcurrency: Maximum concurrent agents. Default: nil (unlimited)
-    ///   - configuration: Agent configuration. Default: .default
+    ///   - configuration: LegacyAgent configuration. Default: .default
     @available(*, deprecated, message: "Use shouldContinueOnError instead of continueOnError")
     public init(
         agents: [any AgentRuntime],
@@ -473,7 +473,7 @@ public actor ParallelGroup: AgentRuntime {
         self.context = context
     }
 
-    // MARK: - Agent Protocol Methods
+    // MARK: - LegacyAgent Protocol Methods
 
     /// Executes all agents in parallel and merges their results.
     ///

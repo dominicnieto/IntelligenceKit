@@ -1,19 +1,19 @@
 @testable import Swarm
 import Testing
 
-@Suite("Agent Defaults")
+@Suite("LegacyAgent Defaults")
 struct AgentDefaultInferenceProviderTests {
     @Test("Throws if no inference provider is set and Foundation Models are unavailable")
     func throwsIfNoProviderAndFoundationModelsUnavailable() async {
         await withSwarmConfigurationIsolation {
             // Keep this deterministic across environments: if Foundation Models are available at runtime,
-            // Agent may run without an explicit provider.
+            // LegacyAgent may run without an explicit provider.
             if DefaultInferenceProviderFactory.makeFoundationModelsProviderIfAvailable() != nil {
                 return
             }
 
             do {
-                _ = try await Agent().run("hi")
+                _ = try await LegacyAgent().run("hi")
                 Issue.record("Expected inference provider unavailable error")
             } catch let error as AgentError {
                 switch error {

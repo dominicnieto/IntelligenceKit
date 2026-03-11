@@ -60,7 +60,7 @@ public struct TracingHelper: Sendable {
         await tracer.trace(TraceEvent(
             traceId: traceId,
             kind: .agentStart,
-            message: "Agent \(agentName) started",
+            message: "LegacyAgent \(agentName) started",
             metadata: [
                 "input_length": .int(input.count)
             ],
@@ -78,7 +78,7 @@ public struct TracingHelper: Sendable {
             traceId: traceId,
             duration: duration.timeInterval,
             kind: .agentComplete,
-            message: "Agent \(agentName) completed",
+            message: "LegacyAgent \(agentName) completed",
             metadata: [
                 "duration_ms": .double(duration.milliseconds),
                 "iterations": .int(result.iterationCount),
@@ -100,7 +100,7 @@ public struct TracingHelper: Sendable {
             duration: duration.timeInterval,
             kind: .agentError,
             level: .error,
-            message: "Agent \(agentName) error: \(error.localizedDescription)",
+            message: "LegacyAgent \(agentName) error: \(error.localizedDescription)",
             metadata: [
                 "duration_ms": .double(duration.milliseconds),
                 "error_type": .string(String(describing: type(of: error))),

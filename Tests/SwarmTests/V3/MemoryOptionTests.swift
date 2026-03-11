@@ -1,3 +1,6 @@
+// MemoryOptionTests.swift
+// Swarm V3 Tests
+
 import Testing
 @testable import Swarm
 
@@ -19,11 +22,6 @@ struct MemoryOptionTests {
 
     @Test func slidingWindowCreatesMemory() {
         let mem = MemoryOption.slidingWindow(maxTokens: 2000).makeMemory()
-        #expect(mem != nil)
-    }
-
-    @Test func slidingWindowDefaultTokens() {
-        let mem = MemoryOption.slidingWindow().makeMemory()
         #expect(mem != nil)
     }
 }

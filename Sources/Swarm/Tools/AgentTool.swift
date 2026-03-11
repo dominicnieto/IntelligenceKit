@@ -18,13 +18,13 @@ import Foundation
 ///
 /// Example:
 /// ```swift
-/// let researcher = Agent(
+/// let researcher = LegacyAgent(
 ///     name: "researcher",
 ///     instructions: "You research topics thoroughly.",
 ///     tools: [searchTool]
 /// )
 ///
-/// let writer = Agent(
+/// let writer = LegacyAgent(
 ///     name: "writer",
 ///     instructions: "Use the researcher for facts, then write clearly.",
 ///     tools: [researcher.asTool()]
@@ -100,7 +100,7 @@ public extension AgentRuntime {
     ///
     /// Example:
     /// ```swift
-    /// let researcher = Agent(name: "researcher", instructions: "Research topics")
+    /// let researcher = LegacyAgent(name: "researcher", instructions: "Research topics")
     /// let tool = researcher.asTool(description: "Research a topic")
     /// ```
     func asTool(name: String? = nil, description: String? = nil) -> AgentTool {

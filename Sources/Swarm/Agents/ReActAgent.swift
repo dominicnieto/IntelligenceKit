@@ -31,7 +31,7 @@ import Foundation
 public actor ReActAgent: AgentRuntime {
     // MARK: Public
 
-    // MARK: - Agent Protocol Properties
+    // MARK: - LegacyAgent Protocol Properties
 
     nonisolated public let tools: [any AnyJSONTool]
     nonisolated public let instructions: String
@@ -52,7 +52,7 @@ public actor ReActAgent: AgentRuntime {
     /// - Parameters:
     ///   - tools: Tools available to the agent. Default: []
     ///   - instructions: System instructions defining agent behavior. Default: ""
-    ///   - configuration: Agent configuration settings. Default: .default
+    ///   - configuration: LegacyAgent configuration settings. Default: .default
     ///   - memory: Optional memory system. Default: nil
     ///   - inferenceProvider: Optional custom inference provider. Default: nil
     ///   - tracer: Optional tracer for observability. Default: nil
@@ -90,7 +90,7 @@ public actor ReActAgent: AgentRuntime {
     /// - Parameters:
     ///   - tools: Typed tools available to the agent. Default: []
     ///   - instructions: System instructions defining agent behavior. Default: ""
-    ///   - configuration: Agent configuration settings. Default: .default
+    ///   - configuration: LegacyAgent configuration settings. Default: .default
     ///   - memory: Optional memory system. Default: nil
     ///   - inferenceProvider: Optional custom inference provider. Default: nil
     ///   - tracer: Optional tracer for observability. Default: nil
@@ -126,7 +126,7 @@ public actor ReActAgent: AgentRuntime {
         )
     }
 
-    // MARK: - Agent Protocol Methods
+    // MARK: - LegacyAgent Protocol Methods
 
     /// Executes the agent with the given input and returns a result.
     /// - Parameters:
@@ -405,12 +405,12 @@ public actor ReActAgent: AgentRuntime {
 
                     switch parsed {
                     case let .finalAnswer(answer):
-                        // Agent has decided on a final answer
+                        // LegacyAgent has decided on a final answer
                         await hooks?.onIterationEnd(context: nil, agent: self, number: iteration)
                         return answer
 
                     case let .toolCall(call):
-                        // Agent wants to call a tool - delegate to helper method
+                        // LegacyAgent wants to call a tool - delegate to helper method
                         scratchpad = try await handleToolCall(
                             call: call,
                             scratchpad: scratchpad,
@@ -420,7 +420,7 @@ public actor ReActAgent: AgentRuntime {
                         )
 
                     case let .thinking(thought):
-                        // Agent is just thinking, continue
+                        // LegacyAgent is just thinking, continue
                         scratchpad += "\nThought: \(thought)"
 
                     case let .invalid(raw):

@@ -14,10 +14,10 @@ public struct Workflow: Sendable {
     // MARK: - Internal step representation
 
     enum StepKind: @unchecked Sendable {
-        case single(AgentV3)
-        case parallel([AgentV3], merge: Parallel.MergeStrategy)
-        case route(@Sendable (String) -> AgentV3?)
-        case repeatUntil(AgentV3, condition: @Sendable (String) -> Bool, maxIterations: Int)
+        case single(Agent)
+        case parallel([Agent], merge: Parallel.MergeStrategy)
+        case route(@Sendable (String) -> Agent?)
+        case repeatUntil(Agent, condition: @Sendable (String) -> Bool, maxIterations: Int)
         case transform(@Sendable (String) async throws -> String)
     }
 
@@ -31,7 +31,7 @@ public struct Workflow: Sendable {
     // MARK: - Step builders (each returns a NEW Workflow — value semantics)
 
     /// Add a single agent step.
-    public func step(_ agent: AgentV3) -> Workflow {
+    public func step(_ agent: Agent) -> Workflow {
         var copy = self
         copy.steps.append(.single(agent))
         return copy
@@ -39,7 +39,7 @@ public struct Workflow: Sendable {
 
     /// Add a parallel execution step with multiple agents.
     public func parallel(
-        _ agents: AgentV3...,
+        _ agents: Agent...,
         merge: Parallel.MergeStrategy = .concatenate
     ) -> Workflow {
         var copy = self
@@ -55,7 +55,7 @@ public struct Workflow: Sendable {
     }
 
     /// Add a routing step that selects an agent based on input.
-    public func route(_ selector: @escaping @Sendable (String) -> AgentV3?) -> Workflow {
+    public func route(_ selector: @escaping @Sendable (String) -> Agent?) -> Workflow {
         var copy = self
         copy.steps.append(.route(selector))
         return copy
@@ -63,7 +63,7 @@ public struct Workflow: Sendable {
 
     /// Add a loop step that repeats until a condition is met.
     public func repeatUntil(
-        _ agent: AgentV3,
+        _ agent: Agent,
         maxIterations: Int = 5,
         until condition: @escaping @Sendable (String) -> Bool
     ) -> Workflow {

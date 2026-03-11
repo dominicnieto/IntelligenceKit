@@ -6,7 +6,7 @@ import Testing
 @Suite("Conversation")
 struct ConversationTests {
     @Test func startsEmpty() {
-        let agent = AgentV3("Be helpful.")
+        let agent = Agent("Be helpful.")
             .provider(MockInferenceProvider(responses: []))
         let conv = Conversation(agent: agent)
         #expect(conv.messages.isEmpty)
@@ -16,7 +16,7 @@ struct ConversationTests {
 
     @Test func sendAppendsUserAndAssistantMessages() async throws {
         let mock = MockInferenceProvider(responses: ["Hello there!"])
-        let conv = Conversation(agent: AgentV3("Help.").provider(mock))
+        let conv = Conversation(agent: Agent("Help.").provider(mock))
         try await conv.send("Hi!")
         #expect(conv.messages.count == 2)
         #expect(conv.messages[0].role == .user)
@@ -27,7 +27,7 @@ struct ConversationTests {
 
     @Test func clearRemovesAllMessages() async throws {
         let mock = MockInferenceProvider(responses: ["Reply"])
-        let conv = Conversation(agent: AgentV3("Help.").provider(mock))
+        let conv = Conversation(agent: Agent("Help.").provider(mock))
         try await conv.send("Hello")
         conv.clear()
         #expect(conv.messages.isEmpty)
@@ -43,7 +43,7 @@ struct ConversationTests {
     @Test func errorMessageAppended() async {
         let mock = MockInferenceProvider(responses: [])
         await mock.setError(AgentError.inferenceProviderUnavailable(reason: "test"))
-        let conv = Conversation(agent: AgentV3("Help.").provider(mock))
+        let conv = Conversation(agent: Agent("Help.").provider(mock))
         do {
             try await conv.send("Hi!")
         } catch {

@@ -53,14 +53,14 @@ struct StreamingEventTests {
         #expect(events.contains { if case .completed = $0 { return true }; return false })
     }
     
-    @Test("Agent stream emits iteration events")
+    @Test("LegacyAgent stream emits iteration events")
     func agentStreamEvents() async throws {
-        // 1. Setup mock provider (Agent uses generateWithToolCalls)
+        // 1. Setup mock provider (LegacyAgent uses generateWithToolCalls)
         let mockProvider = MockInferenceProvider()
         await mockProvider.setResponses(["Final answer directly"])
         
         // 2. Setup agent
-        let agent = try Agent(
+        let agent = try LegacyAgent(
             tools: [],
             instructions: "You are a test assistant.",
             inferenceProvider: mockProvider
@@ -78,7 +78,7 @@ struct StreamingEventTests {
         #expect(events.contains { if case .completed = $0 { return true }; return false })
     }
 
-    @Test("Agent streaming avoids second request without tool-call streaming")
+    @Test("LegacyAgent streaming avoids second request without tool-call streaming")
     func agentStreamingAvoidsSecondRequest() async throws {
         let mockProvider = MockInferenceProvider()
         await mockProvider.setToolCallResponses([
@@ -86,7 +86,7 @@ struct StreamingEventTests {
         ])
 
         let tool = MockTool(name: "test_tool", description: "Test tool")
-        let agent = try Agent(
+        let agent = try LegacyAgent(
             tools: [tool],
             instructions: "You are a test assistant.",
             inferenceProvider: mockProvider

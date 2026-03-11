@@ -7,10 +7,10 @@ import Foundation
 
 // MARK: - AnyAgent
 
-/// Type-erased wrapper for any Agent.
+/// Type-erased wrapper for any LegacyAgent.
 ///
 /// Enables storing heterogeneous agents in collections while preserving
-/// full Agent protocol functionality:
+/// full LegacyAgent protocol functionality:
 ///
 /// ```swift
 /// let agents: [AnyAgent] = [
@@ -30,7 +30,7 @@ import Foundation
 public struct AnyAgent: AgentRuntime, Sendable {
     // MARK: Public
 
-    // MARK: - Agent Protocol Properties
+    // MARK: - LegacyAgent Protocol Properties
 
     /// The tools available to this agent.
     nonisolated public var tools: [any AnyJSONTool] {
@@ -83,7 +83,7 @@ public struct AnyAgent: AgentRuntime, Sendable {
         box = AgentBox(agent)
     }
 
-    // MARK: - Agent Protocol Methods
+    // MARK: - LegacyAgent Protocol Methods
 
     /// Executes the agent with the given input and returns a result.
     /// - Parameters:
@@ -139,7 +139,7 @@ private protocol AnyAgentBox: Sendable {
 
 // MARK: - AgentBox
 
-/// Private class that wraps a concrete Agent implementation.
+/// Private class that wraps a concrete LegacyAgent implementation.
 private final class AgentBox<A: AgentRuntime & Sendable>: AnyAgentBox, Sendable {
     // MARK: Internal
 

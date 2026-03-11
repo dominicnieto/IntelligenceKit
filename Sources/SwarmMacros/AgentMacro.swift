@@ -1,7 +1,7 @@
 // AgentMacro.swift
 // SwarmMacros
 //
-// Implementation of the @AgentActor macro for generating Agent protocol conformance.
+// Implementation of the @AgentActor macro for generating LegacyAgent protocol conformance.
 
 import SwiftSyntax
 import SwiftSyntaxBuilder
@@ -9,7 +9,7 @@ import SwiftSyntaxMacros
 
 // MARK: - AgentMacro
 
-/// The `@AgentActor` macro generates Agent protocol conformance for an actor.
+/// The `@AgentActor` macro generates LegacyAgent protocol conformance for an actor.
 ///
 /// Usage:
 /// ```swift
@@ -25,7 +25,7 @@ import SwiftSyntaxMacros
 /// ```
 ///
 /// Generates:
-/// - All Agent protocol properties with defaults
+/// - All LegacyAgent protocol properties with defaults
 /// - Standard initializer
 /// - `run()` implementation
 /// - `stream()` wrapper
@@ -287,7 +287,7 @@ public struct AgentMacro: MemberMacro, ExtensionMacro {
             if let actorDecl = declaration.as(ActorDeclSyntax.self) {
                 typeName = actorDecl.name.text
             } else {
-                typeName = "Agent"
+                typeName = "LegacyAgent"
             }
             members.append(generateBuilderClass(typeName: typeName, defaultInstructions: instructions))
         }

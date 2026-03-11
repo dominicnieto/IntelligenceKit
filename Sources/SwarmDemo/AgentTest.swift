@@ -34,7 +34,7 @@ struct MyApp {
         // Swarm allows you to build autonomous agents that can use tools.
         // Explore the docs in the 'docs/' directory for more examples.
 
-        let instruction = "Your a research Agent"
+        let instruction = "Your a research LegacyAgent"
         guard let openRouterKey = ProcessInfo.processInfo.environment["OPENROUTER_API_KEY"], !openRouterKey.isEmpty else {
             fatalError("Missing OPENROUTER_API_KEY in environment variables.")
         }
@@ -76,7 +76,7 @@ struct MyApp {
         
 
         let agent = ReActAgent.Builder()
-            .instructions("Your a deep research Agent, when you dont find something you keep looking ")
+            .instructions("Your a deep research LegacyAgent, when you dont find something you keep looking ")
             .inferenceProvider(inferenceProvider)
             .addTool(searchTool)
             .addTool(StringTool())

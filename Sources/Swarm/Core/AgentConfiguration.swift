@@ -129,7 +129,7 @@ public struct AgentConfiguration: Sendable, Equatable {
     // MARK: - Identity
 
     /// The name of the agent for identification and logging.
-    /// Default: "Agent"
+    /// Default: "LegacyAgent"
     public var name: String
 
     // MARK: - Iteration Limits
@@ -281,7 +281,7 @@ public struct AgentConfiguration: Sendable, Equatable {
 
     /// Creates a new agent configuration.
     /// - Parameters:
-    ///   - name: The agent name for identification. Default: "Agent"
+    ///   - name: The agent name for identification. Default: "LegacyAgent"
     ///   - maxIterations: Maximum reasoning iterations. Default: 10
     ///   - timeout: Maximum execution time. Default: 60 seconds
     ///   - temperature: Model temperature (0.0-2.0). Default: 1.0
@@ -302,7 +302,7 @@ public struct AgentConfiguration: Sendable, Equatable {
     ///   - autoPreviousResponseId: Enable auto response ID tracking. Default: false
     ///   - defaultTracingEnabled: Enable default tracing when no tracer configured. Default: true
     public init(
-        name: String = "Agent",
+        name: String = "LegacyAgent",
         maxIterations: Int = 10,
         timeout: Duration = .seconds(60),
         temperature: Double = 1.0,

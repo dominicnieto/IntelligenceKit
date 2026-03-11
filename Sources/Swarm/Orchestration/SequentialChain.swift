@@ -140,7 +140,7 @@ public actor SequentialChain: AgentRuntime {
     /// The agents in execution order.
     nonisolated public var agents: [any AgentRuntime] { chainedAgents }
 
-    // MARK: - Agent Protocol Properties (nonisolated)
+    // MARK: - LegacyAgent Protocol Properties (nonisolated)
 
     /// Tools available to this chain (always empty - agents have their own tools).
     nonisolated public var tools: [any AnyJSONTool] { [] }
@@ -210,7 +210,7 @@ public actor SequentialChain: AgentRuntime {
         )
     }
 
-    // MARK: - Agent Protocol Methods
+    // MARK: - LegacyAgent Protocol Methods
 
     /// Executes the sequential chain.
     ///

@@ -4,22 +4,22 @@ import Testing
 @Suite("Workflow")
 struct WorkflowTests {
     @Test func workflowAccumulatesSteps() {
-        let a = AgentV3("Agent A").named("a")
-        let b = AgentV3("Agent B").named("b")
+        let a = Agent("LegacyAgent A").named("a")
+        let b = Agent("LegacyAgent B").named("b")
         let wf = Workflow().step(a).step(b)
         #expect(wf.stepCount == 2)
     }
 
     @Test func parallelCountsAsOneStep() {
-        let a = AgentV3("A").named("a")
-        let b = AgentV3("B").named("b")
+        let a = Agent("A").named("a")
+        let b = Agent("B").named("b")
         let wf = Workflow().parallel(a, b)
         #expect(wf.stepCount == 1)
     }
 
     @Test func workflowIsImmutableValueType() {
         let wf = Workflow()
-        let wf2 = wf.step(AgentV3("Agent"))
+        let wf2 = wf.step(Agent("LegacyAgent"))
         #expect(wf.stepCount == 0)
         #expect(wf2.stepCount == 1)
     }
@@ -35,14 +35,14 @@ struct WorkflowTests {
     }
 
     @Test func repeatUntilCountsAsStep() {
-        let agent = AgentV3("Agent")
+        let agent = Agent("LegacyAgent")
         let wf = Workflow().repeatUntil(agent, maxIterations: 3) { $0.contains("DONE") }
         #expect(wf.stepCount == 1)
     }
 
     @Test func workflowRunsEndToEnd() async throws {
         let mock = MockInferenceProvider(responses: ["Result from agent"])
-        let agent = AgentV3("Be helpful.").provider(mock)
+        let agent = Agent("Be helpful.").provider(mock)
         let result = try await Workflow().step(agent).run(input: "Hello")
         #expect(!result.output.isEmpty)
     }
@@ -50,8 +50,8 @@ struct WorkflowTests {
     @Test func workflowChainsSteps() async throws {
         let mock1 = MockInferenceProvider(responses: ["Step 1 output"])
         let mock2 = MockInferenceProvider(responses: ["Step 2 output"])
-        let a = AgentV3("Agent A").provider(mock1)
-        let b = AgentV3("Agent B").provider(mock2)
+        let a = Agent("LegacyAgent A").provider(mock1)
+        let b = Agent("LegacyAgent B").provider(mock2)
         let result = try await Workflow().step(a).step(b).run(input: "Start")
         #expect(result.output.contains("Step 2"))
     }

@@ -40,7 +40,7 @@ import Foundation
 ///     traceId: traceId,
 ///     agentName: "MyAgent"
 /// ))
-/// // Output: [2024-12-12T10:30:45Z] [INFO] agentStart agent=MyAgent Agent started
+/// // Output: [2024-12-12T10:30:45Z] [INFO] agentStart agent=MyAgent LegacyAgent started
 /// ```
 public actor ConsoleTracer: Tracer {
     // MARK: Public
@@ -259,8 +259,8 @@ public actor ConsoleTracer: Tracer {
 /// ## Example Output
 ///
 /// ```
-/// [2024-12-12T10:30:45Z] ✨ [INFO] ▶️ Agent Started
-///   📛 Agent: MyAgent
+/// [2024-12-12T10:30:45Z] ✨ [INFO] ▶️ LegacyAgent Started
+///   📛 LegacyAgent: MyAgent
 ///   🆔 Trace: 123e4567-e89b-12d3-a456-426614174000
 ///
 /// [2024-12-12T10:30:46Z] 🔍 [DEBUG] 🔧 Tool Call
@@ -373,7 +373,7 @@ public actor PrettyConsoleTracer: Tracer {
     private func printDetails(_ event: TraceEvent) {
         // Print agent name if present
         if let agentName = event.agentName {
-            Log.tracing.debug("  📛 Agent: \(agentName)")
+            Log.tracing.debug("  📛 LegacyAgent: \(agentName)")
         }
 
         // Print tool name if present
@@ -451,16 +451,16 @@ public actor PrettyConsoleTracer: Tracer {
         switch kind {
         case .agentStart:
             emoji = "▶️"
-            text = "Agent Started"
+            text = "LegacyAgent Started"
         case .agentComplete:
             emoji = "✅"
-            text = "Agent Completed"
+            text = "LegacyAgent Completed"
         case .agentError:
             emoji = "❌"
-            text = "Agent Error"
+            text = "LegacyAgent Error"
         case .agentCancelled:
             emoji = "⏹️"
-            text = "Agent Cancelled"
+            text = "LegacyAgent Cancelled"
         case .toolCall:
             emoji = "🔧"
             text = "Tool Call"

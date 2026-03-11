@@ -11,7 +11,7 @@ import Testing
 
 @Suite("AgentBuilder DSL Tests")
 struct AgentBuilderTests {
-    // MARK: - Basic Agent Building
+    // MARK: - Basic LegacyAgent Building
 
     @Test("Build agent with instructions")
     func buildAgentWithInstructions() async throws {
@@ -71,7 +71,7 @@ struct AgentBuilderTests {
         #expect(agent.configuration.temperature == 0.5)
     }
 
-    // MARK: - Complete Agent Building
+    // MARK: - Complete LegacyAgent Building
 
     @Test("Build complete agent with all components")
     func buildCompleteAgent() async throws {
@@ -235,12 +235,12 @@ struct AgentBuilderTests {
             Tools {
                 MockTool(name: "tool1")
             }
-            Instructions("Agent 1")
+            Instructions("LegacyAgent 1")
         }
 
         // Instructions before Tools
         let agent2 = try ReActAgent {
-            Instructions("Agent 2")
+            Instructions("LegacyAgent 2")
             Tools {
                 MockTool(name: "tool1")
             }
@@ -260,7 +260,7 @@ struct AgentBuilderTests {
         #expect(agent.tools.isEmpty)
     }
 
-    // MARK: - Agent Execution After Building
+    // MARK: - LegacyAgent Execution After Building
 
     @Test("Built agent can execute")
     func builtAgentCanExecute() async throws {

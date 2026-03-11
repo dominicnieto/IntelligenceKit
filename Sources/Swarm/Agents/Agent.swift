@@ -1,24 +1,24 @@
-// Agent.swift
+// LegacyAgent.swift
 // Swarm Framework
 //
 // Tool-calling agent that uses structured LLM tool calling APIs.
 
 import Foundation
 
-// MARK: - Agent
+// MARK: - LegacyAgent
 
 /// An agent that uses structured LLM tool calling APIs for reliable tool invocation.
 ///
-/// Unlike ReActAgent which parses tool calls from text output, Agent
+/// Unlike ReActAgent which parses tool calls from text output, LegacyAgent
 /// leverages the LLM's native tool calling capabilities via `generateWithToolCalls()`
 /// for more reliable and type-safe tool invocation.
 ///
-/// If no inference provider is configured, Agent will try to use Apple Foundation Models
+/// If no inference provider is configured, LegacyAgent will try to use Apple Foundation Models
 /// (on-device) when available. If Foundation Models are unavailable and no provider is set,
-/// Agent throws `AgentError.inferenceProviderUnavailable`.
+/// LegacyAgent throws `AgentError.inferenceProviderUnavailable`.
 ///
 /// Provider resolution order is:
-/// 1. An explicit provider passed to `Agent(...)` (including `Agent(_:)`)
+/// 1. An explicit provider passed to `LegacyAgent(...)` (including `LegacyAgent(_:)`)
 /// 2. A provider set via `.environment(\.inferenceProvider, ...)`
 /// 3. `Swarm.defaultProvider` (set via `Swarm.configure(provider:)`)
 /// 4. `Swarm.cloudProvider` (set via `Swarm.configure(cloudProvider:)`, if tool calling is required)
@@ -34,7 +34,7 @@ import Foundation
 ///
 /// Example:
 /// ```swift
-/// let agent = Agent(
+/// let agent = LegacyAgent(
 ///     tools: [WeatherTool(), CalculatorTool()],
 ///     instructions: "You are a helpful assistant with access to tools."
 /// )
@@ -42,10 +42,10 @@ import Foundation
 /// let result = try await agent.run("What's the weather in Tokyo?")
 /// print(result.output)
 /// ```
-public actor Agent: AgentRuntime {
+public actor LegacyAgent: AgentRuntime {
     // MARK: Public
 
-    // MARK: - Agent Protocol Properties
+    // MARK: - LegacyAgent Protocol Properties
 
     nonisolated public let tools: [any AnyJSONTool]
     nonisolated public let instructions: String
@@ -64,11 +64,11 @@ public actor Agent: AgentRuntime {
 
     // MARK: - Initialization
 
-    /// Creates a new Agent.
+    /// Creates a new LegacyAgent.
     /// - Parameters:
     ///   - tools: Tools available to the agent. Default: []
     ///   - instructions: System instructions defining agent behavior. Default: ""
-    ///   - configuration: Agent configuration settings. Default: .default
+    ///   - configuration: LegacyAgent configuration settings. Default: .default
     ///   - memory: Optional memory system. Default: nil
     ///   - inferenceProvider: Optional custom inference provider. Default: nil
     ///   - tracer: Optional tracer for observability. Default: nil
@@ -106,7 +106,7 @@ public actor Agent: AgentRuntime {
     ///
     /// This enables an opinionated, easy setup:
     /// ```swift
-    /// let agent = Agent(.anthropic(key: "..."))
+    /// let agent = LegacyAgent(.anthropic(key: "..."))
     /// ```
     public init(
         _ inferenceProvider: any InferenceProvider,
@@ -134,11 +134,11 @@ public actor Agent: AgentRuntime {
         )
     }
 
-    /// Creates a new Agent with typed tools.
+    /// Creates a new LegacyAgent with typed tools.
     /// - Parameters:
     ///   - tools: Typed tools available to the agent. Default: []
     ///   - instructions: System instructions defining agent behavior. Default: ""
-    ///   - configuration: Agent configuration settings. Default: .default
+    ///   - configuration: LegacyAgent configuration settings. Default: .default
     ///   - memory: Optional memory system. Default: nil
     ///   - inferenceProvider: Optional custom inference provider. Default: nil
     ///   - tracer: Optional tracer for observability. Default: nil
@@ -174,7 +174,7 @@ public actor Agent: AgentRuntime {
         )
     }
 
-    /// Creates a new Agent with simplified handoff declaration.
+    /// Creates a new LegacyAgent with simplified handoff declaration.
     ///
     /// This convenience initializer accepts an array of `AgentRuntime` conforming agents
     /// and automatically wraps each one as an `AnyHandoffConfiguration`, simplifying
@@ -182,7 +182,7 @@ public actor Agent: AgentRuntime {
     ///
     /// Example:
     /// ```swift
-    /// let triageAgent = Agent(
+    /// let triageAgent = LegacyAgent(
     ///     instructions: "Route requests to the right specialist.",
     ///     handoffAgents: [billingAgent, supportAgent, salesAgent]
     /// )
@@ -191,7 +191,7 @@ public actor Agent: AgentRuntime {
     /// - Parameters:
     ///   - tools: Tools available to the agent. Default: []
     ///   - instructions: System instructions defining agent behavior. Default: ""
-    ///   - configuration: Agent configuration settings. Default: .default
+    ///   - configuration: LegacyAgent configuration settings. Default: .default
     ///   - memory: Optional memory system. Default: nil
     ///   - inferenceProvider: Optional custom inference provider. Default: nil
     ///   - tracer: Optional tracer for observability. Default: nil
@@ -233,7 +233,7 @@ public actor Agent: AgentRuntime {
         )
     }
 
-    // MARK: - Agent Protocol Methods
+    // MARK: - LegacyAgent Protocol Methods
 
     /// Executes the agent with the given input and returns a result.
     /// - Parameters:
@@ -351,7 +351,7 @@ public actor Agent: AgentRuntime {
 
         let tracing = TracingHelper(
             tracer: activeTracer,
-            agentName: configuration.name.isEmpty ? "Agent" : configuration.name
+            agentName: configuration.name.isEmpty ? "LegacyAgent" : configuration.name
         )
         await tracing.traceStart(input: input)
 
@@ -438,7 +438,7 @@ public actor Agent: AgentRuntime {
     // MARK: - Inference Provider Resolution
 
     private func resolvedInferenceProvider() async throws -> any InferenceProvider {
-        // 1. Explicit provider on Agent
+        // 1. Explicit provider on LegacyAgent
         if let inferenceProvider {
             return inferenceProvider
         }
@@ -471,7 +471,7 @@ public actor Agent: AgentRuntime {
             No inference provider configured and Apple Foundation Models are unavailable.
 
             Configure a provider globally via `await Swarm.configure(provider: ...)` \
-            or pass one explicitly to Agent(...).
+            or pass one explicitly to LegacyAgent(...).
             """
         )
     }
@@ -1131,16 +1131,16 @@ public actor Agent: AgentRuntime {
     }
 }
 
-// MARK: Agent.Builder
+// MARK: LegacyAgent.Builder
 
-public extension Agent {
-    /// Builder for creating Agent instances with a fluent API.
+public extension LegacyAgent {
+    /// Builder for creating LegacyAgent instances with a fluent API.
     ///
     /// Uses value semantics (struct) for Swift 6 concurrency safety.
     ///
     /// Example:
     /// ```swift
-    /// let agent = Agent.Builder()
+    /// let agent = LegacyAgent.Builder()
     ///     .tools([WeatherTool(), CalculatorTool()])
     ///     .instructions("You are a helpful assistant.")
     ///     .configuration(.default.maxIterations(5))
@@ -1326,10 +1326,10 @@ public extension Agent {
         }
 
         /// Builds the agent.
-        /// - Returns: A new Agent instance.
+        /// - Returns: A new LegacyAgent instance.
         /// - Throws: `ToolRegistryError.duplicateToolName` if duplicate tool names are provided.
-        public func build() throws -> Agent {
-            try Agent(
+        public func build() throws -> LegacyAgent {
+            try LegacyAgent(
                 tools: _tools,
                 instructions: _instructions,
                 configuration: _configuration,
@@ -1358,14 +1358,14 @@ public extension Agent {
     }
 }
 
-// MARK: - Agent DSL Extension
+// MARK: - LegacyAgent DSL Extension
 
-public extension Agent {
-    /// Creates an Agent using the declarative builder DSL.
+public extension LegacyAgent {
+    /// Creates an LegacyAgent using the declarative builder DSL.
     ///
     /// Example:
     /// ```swift
-    /// let agent = Agent {
+    /// let agent = LegacyAgent {
     ///     Instructions("You are a helpful assistant.")
     ///
     ///     Tools {
@@ -1398,16 +1398,16 @@ public extension Agent {
 
 // MARK: - Convenience Initializers
 
-public extension Agent {
-    /// Creates a new Agent with a name as the first parameter.
+public extension LegacyAgent {
+    /// Creates a new LegacyAgent with a name as the first parameter.
     ///
-    /// This convenience initializer mirrors the OpenAI Agent SDK pattern
+    /// This convenience initializer mirrors the OpenAI LegacyAgent SDK pattern
     /// where the agent name is a top-level parameter rather than nested
     /// inside configuration.
     ///
     /// Example:
     /// ```swift
-    /// let agent = Agent(name: "Triage", instructions: "Route requests", tools: [weatherTool])
+    /// let agent = LegacyAgent(name: "Triage", instructions: "Route requests", tools: [weatherTool])
     /// ```
     ///
     /// - Parameters:
@@ -1456,16 +1456,16 @@ public extension Agent {
 
 // MARK: - Simplified Handoff Declaration
 
-public extension Agent {
-    /// Creates an Agent with agents directly as handoff targets.
+public extension LegacyAgent {
+    /// Creates an LegacyAgent with agents directly as handoff targets.
     ///
     /// This convenience initializer eliminates the need to wrap each agent
     /// in `AnyHandoffConfiguration`, inspired by the OpenAI SDK pattern
-    /// where you pass agents directly: `Agent(handoffs=[billing, support])`.
+    /// where you pass agents directly: `LegacyAgent(handoffs=[billing, support])`.
     ///
     /// Example:
     /// ```swift
-    /// let triage = Agent(
+    /// let triage = LegacyAgent(
     ///     name: "Triage",
     ///     instructions: "Route requests",
     ///     handoffAgents: [billingAgent, supportAgent]

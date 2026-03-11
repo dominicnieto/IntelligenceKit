@@ -15,7 +15,7 @@ public protocol HiveAgentsPreModelHook: Sendable {
     /// - Parameters:
     ///   - messages: The candidate messages for the upcoming model request.
     ///   - systemPrompt: A base system prompt string that callers may augment.
-    ///   - context: Agent runtime context for model-call preparation.
+    ///   - context: LegacyAgent runtime context for model-call preparation.
     /// - Returns: Updated message list and system prompt string.
     func transform(
         messages: [HiveChatMessage],

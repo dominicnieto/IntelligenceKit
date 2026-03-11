@@ -419,7 +419,7 @@ public extension AgentRuntime {
     ///
     /// Example:
     /// ```swift
-    /// let billingAgent = Agent(name: "Billing", instructions: "Handle billing")
+    /// let billingAgent = LegacyAgent(name: "Billing", instructions: "Handle billing")
     /// let handoff = billingAgent.asHandoff(
     ///     toolName: "transfer_to_billing",
     ///     description: "Transfer billing questions"

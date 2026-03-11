@@ -59,7 +59,7 @@ public struct HiveBackedAgent: AgentRuntime, Sendable {
     /// - Parameters:
     ///   - runtime: The `HiveAgentsRuntime` to delegate execution to.
     ///   - name: Display name for this agent in Swarm orchestrations.
-    ///   - instructions: Agent instructions (for display/logging; the actual
+    ///   - instructions: LegacyAgent instructions (for display/logging; the actual
     ///     system prompt is managed by the Hive graph's `preModel` node).
     ///   - threadID: The Hive thread to run on. Default: a new UUID-based thread.
     ///   - runOptions: Hive run options. Default: 20 max steps, checkpointing disabled.

@@ -488,7 +488,7 @@ extension GuardrailErrorTests {
         let store = ErrorStore()
         let error = GuardrailError.outputTripwireTriggered(
             guardrailName: "Guard",
-            agentName: "Agent",
+            agentName: "LegacyAgent",
             message: "Error",
             outputInfo: nil
         )

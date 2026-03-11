@@ -1050,7 +1050,7 @@ public struct Orchestration: Sendable, OrchestratorProtocol {
     private let hiveCheckpointStore: AnyHiveCheckpointStore<OrchestrationHiveEngine.Schema>?
     private let runRegistry = OrchestrationRunRegistry()
 
-    // MARK: - Agent Protocol Properties
+    // MARK: - LegacyAgent Protocol Properties
 
     public var tools: [any AnyJSONTool] { [] }
 
@@ -1066,7 +1066,7 @@ public struct Orchestration: Sendable, OrchestratorProtocol {
 
     /// Creates a new orchestration.
     /// - Parameters:
-    ///   - configuration: Agent configuration for this orchestration. Default: `.default`
+    ///   - configuration: LegacyAgent configuration for this orchestration. Default: `.default`
     ///   - checkpointPolicy: Checkpoint policy for Hive orchestration execution. Default: `.onInterrupt`
     ///   - handoffs: Handoff configurations for sub-agents. Default: []
     ///   - content: A builder closure that produces the orchestration steps.
@@ -1101,7 +1101,7 @@ public struct Orchestration: Sendable, OrchestratorProtocol {
         self.handoffs = handoffs
     }
 
-    // MARK: - Agent Protocol Methods
+    // MARK: - LegacyAgent Protocol Methods
 
     public func run(
         _ input: String,

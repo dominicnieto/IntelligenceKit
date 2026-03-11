@@ -301,7 +301,7 @@ public func >>> <A: Sendable, B: Sendable, C: Sendable>(
     lhs.then(rhs)
 }
 
-// MARK: - Agent Pipeline Extension
+// MARK: - LegacyAgent Pipeline Extension
 
 public extension AgentRuntime {
     /// Converts this agent into a pipeline.

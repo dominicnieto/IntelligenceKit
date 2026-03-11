@@ -1,3 +1,6 @@
+// ToolV3Tests.swift
+// Swarm V3 Tests
+
 import Testing
 @testable import Swarm
 
@@ -39,10 +42,10 @@ struct ToolV3Tests {
             func call() async throws -> String { "" }
             func toAnyJSONTool() -> any AnyJSONTool { fatalError() }
         }
-        let includeExtra = true
+        let include = true
         @ToolBuilder var tools: [any ToolV3] {
             FakeTool()
-            if includeExtra { FakeTool() }
+            if include { FakeTool() }
         }
         #expect(tools.count == 2)
     }

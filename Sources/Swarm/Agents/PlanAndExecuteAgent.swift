@@ -256,7 +256,7 @@ extension ExecutionPlan: CustomStringConvertible {
 public actor PlanAndExecuteAgent: AgentRuntime {
     // MARK: Public
 
-    // MARK: - Agent Protocol Properties
+    // MARK: - LegacyAgent Protocol Properties
 
     nonisolated public let tools: [any AnyJSONTool]
     nonisolated public let instructions: String
@@ -282,7 +282,7 @@ public actor PlanAndExecuteAgent: AgentRuntime {
     /// - Parameters:
     ///   - tools: Tools available to the agent. Default: []
     ///   - instructions: System instructions. Default: ""
-    ///   - configuration: Agent configuration. Default: .default
+    ///   - configuration: LegacyAgent configuration. Default: .default
     ///   - memory: Optional memory system. Default: nil
     ///   - inferenceProvider: Optional inference provider. Default: nil
     ///   - tracer: Optional tracer for observability. Default: nil
@@ -323,7 +323,7 @@ public actor PlanAndExecuteAgent: AgentRuntime {
     /// - Parameters:
     ///   - tools: Typed tools available to the agent. Default: []
     ///   - instructions: System instructions defining agent behavior. Default: ""
-    ///   - configuration: Agent configuration settings. Default: .default
+    ///   - configuration: LegacyAgent configuration settings. Default: .default
     ///   - memory: Optional memory system. Default: nil
     ///   - inferenceProvider: Optional custom inference provider. Default: nil
     ///   - tracer: Optional tracer for observability. Default: nil
@@ -359,7 +359,7 @@ public actor PlanAndExecuteAgent: AgentRuntime {
         )
     }
 
-    // MARK: - Agent Protocol Methods
+    // MARK: - LegacyAgent Protocol Methods
 
     /// Executes the agent with the given input and returns a result.
     /// - Parameters:

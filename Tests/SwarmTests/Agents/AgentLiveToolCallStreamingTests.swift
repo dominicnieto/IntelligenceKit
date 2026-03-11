@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Swarm
 
-@Suite("Agent Live Tool Call Streaming")
+@Suite("LegacyAgent Live Tool Call Streaming")
 struct AgentLiveToolCallStreamingTests {
     @Test("Emits toolCallPartial before toolCallStarted when provider streams tool-call assembly")
     func emitsPartialUpdatesBeforeToolExecution() async throws {
@@ -105,7 +105,7 @@ struct AgentLiveToolCallStreamingTests {
             ],
         ])
 
-        let agent = try Agent(
+        let agent = try LegacyAgent(
             tools: [EchoTool()],
             configuration: .default.maxIterations(3),
             inferenceProvider: provider
@@ -199,8 +199,8 @@ struct AgentLiveToolCallStreamingTests {
                 tools _: [ToolSchema],
                 options _: InferenceOptions
             ) async throws -> InferenceResponse {
-                // If Agent falls back to the non-streaming path, this is called (and the test should fail).
-                throw AgentError.generationFailed(reason: "Expected Agent to use streamWithToolCalls(), but it called generateWithToolCalls()")
+                // If LegacyAgent falls back to the non-streaming path, this is called (and the test should fail).
+                throw AgentError.generationFailed(reason: "Expected LegacyAgent to use streamWithToolCalls(), but it called generateWithToolCalls()")
             }
 
             func streamWithToolCalls(
@@ -238,7 +238,7 @@ struct AgentLiveToolCallStreamingTests {
             ],
         ])
 
-        let agent = try Agent(
+        let agent = try LegacyAgent(
             tools: [EchoTool()],
             configuration: .default.maxIterations(3),
             inferenceProvider: ConduitProviderSelection.provider(provider)

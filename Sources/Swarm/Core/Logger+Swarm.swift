@@ -36,10 +36,10 @@ public enum Log {
     /// Logger for agent-related operations.
     ///
     /// Use for:
-    /// - Agent initialization and configuration
-    /// - Agent execution lifecycle
+    /// - LegacyAgent initialization and configuration
+    /// - LegacyAgent execution lifecycle
     /// - Tool invocations
-    /// - Agent state transitions
+    /// - LegacyAgent state transitions
     public static let agents = Logger(label: "com.swarm.agents")
 
     /// Logger for memory system operations.
@@ -72,7 +72,7 @@ public enum Log {
     /// Logger for multi-agent orchestration.
     ///
     /// Use for:
-    /// - Agent coordination
+    /// - LegacyAgent coordination
     /// - Message passing between agents
     /// - Orchestration state transitions
     /// - Delegation and handoffs

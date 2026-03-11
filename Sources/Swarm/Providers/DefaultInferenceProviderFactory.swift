@@ -3,7 +3,7 @@
 //
 // Opinionated default inference provider selection.
 //
-// Agent (the default tool-calling runtime) uses this factory to attempt
+// LegacyAgent (the default tool-calling runtime) uses this factory to attempt
 // Apple Foundation Models when no explicit inference provider is configured.
 
 import Foundation

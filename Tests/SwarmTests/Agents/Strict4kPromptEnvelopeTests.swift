@@ -29,13 +29,13 @@ struct Strict4kPromptEnvelopeTests {
         #expect(prompt.contains("needle-user-input"))
     }
 
-    @Test("Agent caps prompt to strict4k max input budget")
+    @Test("LegacyAgent caps prompt to strict4k max input budget")
     func agentCapsPrompt() async throws {
         let provider = MockInferenceProvider(responses: ["agent-ok"])
         let memory = MockAgentMemory(context: longBlock("memory", lines: 420))
         let session = try await makeLargeSession()
 
-        let agent = try Agent(
+        let agent = try LegacyAgent(
             tools: [],
             instructions: longBlock("instructions", lines: 220),
             configuration: strict4kConfig(),
@@ -46,7 +46,7 @@ struct Strict4kPromptEnvelopeTests {
         _ = try await agent.run("needle-user-input", session: session)
 
         guard let prompt = await provider.lastGenerateCall?.prompt else {
-            Issue.record("Expected Agent to call generate() when no tools are configured")
+            Issue.record("Expected LegacyAgent to call generate() when no tools are configured")
             return
         }
 

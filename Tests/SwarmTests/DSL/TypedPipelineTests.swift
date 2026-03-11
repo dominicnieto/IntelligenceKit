@@ -216,15 +216,15 @@ struct TypedPipelineTests {
         #expect(transformed == "HELLO")
     }
 
-    // MARK: - Agent Pipeline Integration
+    // MARK: - LegacyAgent Pipeline Integration
 
     @Test("Chain agents using pipelines")
     func chainAgentsUsingPipelines() async throws {
         let mockProvider1 = MockInferenceProvider(responses: ["Final Answer: Step 1 complete"])
         let mockProvider2 = MockInferenceProvider(responses: ["Final Answer: Step 2 complete"])
 
-        let agent1 = try ReActAgent(tools: [], instructions: "Agent 1", inferenceProvider: mockProvider1)
-        let agent2 = try ReActAgent(tools: [], instructions: "Agent 2", inferenceProvider: mockProvider2)
+        let agent1 = try ReActAgent(tools: [], instructions: "LegacyAgent 1", inferenceProvider: mockProvider1)
+        let agent2 = try ReActAgent(tools: [], instructions: "LegacyAgent 2", inferenceProvider: mockProvider2)
 
         let pipeline1 = agent1.asPipeline()
         let outputExtractor = Pipeline<AgentResult, String> { $0.output }

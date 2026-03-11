@@ -264,7 +264,7 @@ public actor ResponseTracker {
     ///     responseId: "abc-123",
     ///     sessionId: "user_456"
     /// ) {
-    ///     print("Agent: \(response.agentName)")
+    ///     print("LegacyAgent: \(response.agentName)")
     ///     print("Output: \(response.output)")
     ///     print("Tool calls: \(response.toolCalls.count)")
     /// }

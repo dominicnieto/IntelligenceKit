@@ -112,7 +112,7 @@ public protocol AgentRuntime: Sendable {
     ) async throws -> AgentResponse
 }
 
-// MARK: - Agent Protocol Extensions
+// MARK: - LegacyAgent Protocol Extensions
 
 public extension AgentRuntime {
     /// Default name derived from configuration.
@@ -137,7 +137,7 @@ public extension AgentRuntime {
     nonisolated var handoffs: [AnyHandoffConfiguration] { [] }
 }
 
-// MARK: - Agent Backward Compatibility
+// MARK: - LegacyAgent Backward Compatibility
 
 public extension AgentRuntime {
     /// Convenience method for run with hooks but no session.
@@ -161,7 +161,7 @@ public extension AgentRuntime {
     }
 }
 
-// MARK: - Agent runWithResponse Extensions
+// MARK: - LegacyAgent runWithResponse Extensions
 
 public extension AgentRuntime {
     /// Default implementation of `runWithResponse` using the existing `run()` method.

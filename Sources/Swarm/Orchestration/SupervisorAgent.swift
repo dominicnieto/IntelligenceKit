@@ -271,7 +271,7 @@ public struct LLMRoutingStrategy: RoutingStrategy {
         Respond with ONLY the exact agent name that should handle this request.
         Do not include any explanation or additional text.
 
-        Selected Agent:
+        Selected LegacyAgent:
         """
 
         return prompt
@@ -477,7 +477,7 @@ public struct KeywordRoutingStrategy: RoutingStrategy {
 public actor SupervisorAgent: AgentRuntime {
     // MARK: Public
 
-    // MARK: - Agent Protocol Properties
+    // MARK: - LegacyAgent Protocol Properties
 
     nonisolated public let tools: [any AnyJSONTool] = []
     nonisolated public let instructions: String
@@ -507,7 +507,7 @@ public actor SupervisorAgent: AgentRuntime {
     ///   - agents: Tuples of (name, agent, description) for each sub-agent.
     ///   - routingStrategy: The strategy to use for routing requests.
     ///   - fallbackAgent: Optional agent to use when routing fails. Default: nil
-    ///   - configuration: Agent configuration. Default: .default
+    ///   - configuration: LegacyAgent configuration. Default: .default
     ///   - instructions: Custom instructions. Default: auto-generated
     ///   - enableContextTracking: Track execution in AgentContext. Default: true
     ///   - handoffs: Handoff configurations for sub-agents. Default: []
@@ -539,7 +539,7 @@ public actor SupervisorAgent: AgentRuntime {
         }
     }
 
-    // MARK: - Agent Protocol Methods
+    // MARK: - LegacyAgent Protocol Methods
 
     public func run(_ input: String, session: (any Session)? = nil, hooks: (any RunHooks)? = nil) async throws -> AgentResult {
         let builder = AgentResult.Builder()
@@ -561,7 +561,7 @@ public actor SupervisorAgent: AgentRuntime {
 
             // Find the selected agent
             guard let selectedEntry = agentRegistry.first(where: { $0.name == decision.selectedAgentName }) else {
-                // Agent not found, use fallback if available
+                // LegacyAgent not found, use fallback if available
                 return try await handleFallback(
                     input: input,
                     session: session,

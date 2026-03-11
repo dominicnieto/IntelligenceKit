@@ -3,7 +3,7 @@ import Testing
 
 // MARK: - SwarmConfigurationTests
 
-@Suite("SwarmConfiguration")
+@Suite("SwarmConfiguration", .serialized)
 struct SwarmConfigurationTests {
     // MARK: Internal
 

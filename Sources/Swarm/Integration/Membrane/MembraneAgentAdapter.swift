@@ -1,10 +1,7 @@
 import Foundation
 
-#if canImport(Membrane)
+#if SWARM_MEMBRANE
 import Membrane
-#endif
-
-#if canImport(MembraneHive)
 import MembraneHive
 #endif
 
@@ -112,7 +109,7 @@ public actor DefaultMembraneAgentAdapter: MembraneAgentAdapter {
     public init(configuration: MembraneFeatureConfiguration = .default) {
         self.configuration = configuration
 
-        #if canImport(Membrane)
+        #if SWARM_MEMBRANE
         jitLoader = JITToolLoader(jitMinToolCount: configuration.jitMinToolCount)
         let store = InMemoryPointerStore()
         pointerStore = store
@@ -141,7 +138,7 @@ public actor DefaultMembraneAgentAdapter: MembraneAgentAdapter {
         var selectedSchemas = sortedSchemas
         var mode = "allowAll"
 
-        #if canImport(Membrane)
+        #if SWARM_MEMBRANE
         let manifests = sortedSchemas.map { ToolManifest(name: $0.name, description: $0.description) }
         var nextPlan = jitLoader.plan(tools: manifests, existingPlan: toolPlan)
 
@@ -196,7 +193,7 @@ public actor DefaultMembraneAgentAdapter: MembraneAgentAdapter {
     ) async throws -> MembraneToolResultBoundary {
         usageCounts[toolName, default: 0] += 1
 
-        #if canImport(Membrane)
+        #if SWARM_MEMBRANE
         let decision = try await pointerResolver.pointerizeIfNeeded(toolName: toolName, output: output)
         switch decision {
         case let .inline(text):
@@ -274,7 +271,7 @@ public actor DefaultMembraneAgentAdapter: MembraneAgentAdapter {
                 )
             }
 
-            #if canImport(Membrane)
+            #if SWARM_MEMBRANE
             let payload = try await pointerStore.resolve(pointerID: pointerID)
             if let text = String(data: payload, encoding: .utf8) {
                 return text
@@ -304,7 +301,7 @@ public actor DefaultMembraneAgentAdapter: MembraneAgentAdapter {
     private var pointerIDs: [String] = []
     private var usageCounts: [String: Int] = [:]
 
-    #if canImport(Membrane)
+    #if SWARM_MEMBRANE
     private let jitLoader: JITToolLoader
     private let pointerStore: InMemoryPointerStore
     private let pointerResolver: PointerResolver

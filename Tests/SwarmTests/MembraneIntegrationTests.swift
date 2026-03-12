@@ -43,7 +43,7 @@ struct MembraneIntegrationTests {
 
         #expect(!prompt.contains("[... context truncated for strict4k budget ...]"))
 
-        #if canImport(Membrane)
+        #if SWARM_MEMBRANE
         #expect(plannedTools.count < tools.count)
 
         let schemaNames = plannedTools.map(\.name)

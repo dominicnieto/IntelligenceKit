@@ -108,30 +108,16 @@ public protocol OutputGuardrail: Guardrail {
 ///     return .passed()
 /// }
 /// ```
-public struct ClosureOutputGuardrail: OutputGuardrail, Sendable {
-    // MARK: Public
-
+struct ClosureOutputGuardrail: OutputGuardrail, Sendable {
     /// The name of this guardrail.
-    public let name: String
-
-    // MARK: - Initialization
+    let name: String
 
     /// Creates a closure-based output guardrail.
     ///
     /// - Parameters:
     ///   - name: The name of this guardrail for identification.
     ///   - handler: The validation closure that receives output, agent, and context.
-    ///
-    /// Example:
-    /// ```swift
-    /// let guardrail = ClosureOutputGuardrail(name: "profanity_filter") { output, agent, context in
-    ///     if output.contains("badword") {
-    ///         return .tripwire(message: "Profanity detected")
-    ///     }
-    ///     return .passed()
-    /// }
-    /// ```
-    public init(
+    init(
         name: String,
         handler: @escaping @Sendable (String, any AgentRuntime, AgentContext?) async throws -> GuardrailResult
     ) {
@@ -139,21 +125,10 @@ public struct ClosureOutputGuardrail: OutputGuardrail, Sendable {
         self.handler = handler
     }
 
-    // MARK: - OutputGuardrail
-
     /// Validates the agent output by calling the handler closure.
-    ///
-    /// - Parameters:
-    ///   - output: The output text from the agent to validate.
-    ///   - agent: The agent that produced this output.
-    ///   - context: Optional orchestration context with shared state.
-    /// - Returns: The result from the handler closure.
-    /// - Throws: Any error thrown by the handler closure.
-    public func validate(_ output: String, agent: any AgentRuntime, context: AgentContext?) async throws -> GuardrailResult {
+    func validate(_ output: String, agent: any AgentRuntime, context: AgentContext?) async throws -> GuardrailResult {
         try await handler(output, agent, context)
     }
-
-    // MARK: Private
 
     /// The validation handler closure.
     private let handler: @Sendable (String, any AgentRuntime, AgentContext?) async throws -> GuardrailResult
@@ -297,9 +272,9 @@ struct OutputGuardrailBuilder: Sendable {
     }
 }
 
-// MARK: - Convenience Factories
+// MARK: - Convenience Factories (Internal — legacy)
 
-public extension ClosureOutputGuardrail {
+extension ClosureOutputGuardrail {
     /// Creates a guardrail that checks output length.
     static func maxLength(_ maxLength: Int, name: String = "MaxOutputLengthGuardrail") -> ClosureOutputGuardrail {
         ClosureOutputGuardrail(name: name) { output, _, _ in
@@ -311,5 +286,46 @@ public extension ClosureOutputGuardrail {
             }
             return .passed()
         }
+    }
+}
+
+// MARK: - OutputGuard Static Factories
+
+public extension OutputGuard {
+    /// Creates a guardrail that checks output length.
+    ///
+    /// Example:
+    /// ```swift
+    /// let agent = Agent(
+    ///     instructions: "Assistant",
+    ///     inferenceProvider: provider,
+    ///     outputGuardrails: [OutputGuard.maxLength(2000)]
+    /// )
+    /// ```
+    static func maxLength(_ maxLength: Int, name: String = "MaxOutputLengthGuardrail") -> OutputGuard {
+        OutputGuard(name) { output in
+            if output.count > maxLength {
+                return .tripwire(
+                    message: "Output exceeds maximum length of \(maxLength)",
+                    metadata: ["length": .int(output.count), "limit": .int(maxLength)]
+                )
+            }
+            return .passed()
+        }
+    }
+
+    /// Creates a custom output guardrail from a closure.
+    ///
+    /// Example:
+    /// ```swift
+    /// let noPII = OutputGuard.custom("no_pii") { output in
+    ///     output.contains("SSN") ? .tripwire(message: "PII detected") : .passed()
+    /// }
+    /// ```
+    static func custom(
+        _ name: String,
+        _ validate: @escaping @Sendable (String) async throws -> GuardrailResult
+    ) -> OutputGuard {
+        OutputGuard(name, validate)
     }
 }

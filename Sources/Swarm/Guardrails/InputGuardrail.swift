@@ -73,36 +73,16 @@ public protocol InputGuardrail: Guardrail {
 ///
 /// let result = try await lengthGuardrail.validate("user input", context: nil)
 /// ```
-public struct ClosureInputGuardrail: InputGuardrail, Sendable {
-    // MARK: Public
-
+struct ClosureInputGuardrail: InputGuardrail, Sendable {
     /// The name of this guardrail for identification and logging.
-    public let name: String
-
-    // MARK: - Initialization
+    let name: String
 
     /// Creates a closure-based input guardrail.
     ///
     /// - Parameters:
     ///   - name: The name of this guardrail.
     ///   - handler: The validation closure that receives input and context, returning a result.
-    ///
-    /// Example:
-    /// ```swift
-    /// let guardrail = ClosureInputGuardrail(name: "ProfanityFilter") { input, context in
-    ///     let profanityWords = ["badword1", "badword2"]
-    ///     for word in profanityWords {
-    ///         if input.lowercased().contains(word) {
-    ///             return .tripwire(
-    ///                 message: "Profanity detected",
-    ///                 outputInfo: .dictionary(["word": .string(word)])
-    ///             )
-    ///         }
-    ///     }
-    ///     return .passed(message: "Content is clean")
-    /// }
-    /// ```
-    public init(
+    init(
         name: String,
         handler: @escaping @Sendable (String, AgentContext?) async throws -> GuardrailResult
     ) {
@@ -110,20 +90,10 @@ public struct ClosureInputGuardrail: InputGuardrail, Sendable {
         self.handler = handler
     }
 
-    // MARK: - InputGuardrail Conformance
-
     /// Validates the input using the handler closure.
-    ///
-    /// - Parameters:
-    ///   - input: The input string to validate.
-    ///   - context: Optional agent context for validation decisions.
-    /// - Returns: The result from the handler closure.
-    /// - Throws: Any error thrown by the handler closure.
-    public func validate(_ input: String, context: AgentContext?) async throws -> GuardrailResult {
+    func validate(_ input: String, context: AgentContext?) async throws -> GuardrailResult {
         try await handler(input, context)
     }
-
-    // MARK: Private
 
     /// The validation handler closure.
     private let handler: @Sendable (String, AgentContext?) async throws -> GuardrailResult
@@ -243,9 +213,9 @@ struct InputGuardrailBuilder: Sendable {
     }
 }
 
-// MARK: - Convenience Factories
+// MARK: - Convenience Factories (Internal — legacy)
 
-public extension ClosureInputGuardrail {
+extension ClosureInputGuardrail {
     /// Creates a guardrail that checks input length.
     static func maxLength(_ maxLength: Int, name: String = "MaxLengthGuardrail") -> ClosureInputGuardrail {
         ClosureInputGuardrail(name: name) { input, _ in
@@ -267,5 +237,67 @@ public extension ClosureInputGuardrail {
             }
             return .passed()
         }
+    }
+}
+
+// MARK: - InputGuard Static Factories
+
+public extension InputGuard {
+    /// Creates a guardrail that checks input length.
+    ///
+    /// Example:
+    /// ```swift
+    /// let agent = Agent(
+    ///     instructions: "Assistant",
+    ///     inferenceProvider: provider,
+    ///     inputGuardrails: [InputGuard.maxLength(500)]
+    /// )
+    /// ```
+    static func maxLength(_ maxLength: Int, name: String = "MaxLengthGuardrail") -> InputGuard {
+        InputGuard(name) { input in
+            if input.count > maxLength {
+                return .tripwire(
+                    message: "Input exceeds maximum length of \(maxLength)",
+                    metadata: ["length": .int(input.count), "limit": .int(maxLength)]
+                )
+            }
+            return .passed()
+        }
+    }
+
+    /// Creates a guardrail that rejects empty inputs.
+    ///
+    /// Example:
+    /// ```swift
+    /// let agent = Agent(
+    ///     instructions: "Assistant",
+    ///     inferenceProvider: provider,
+    ///     inputGuardrails: [InputGuard.notEmpty()]
+    /// )
+    /// ```
+    static func notEmpty(name: String = "NotEmptyGuardrail") -> InputGuard {
+        InputGuard(name) { input in
+            if input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return .tripwire(message: "Input cannot be empty")
+            }
+            return .passed()
+        }
+    }
+
+    /// Creates a custom input guardrail from a closure.
+    ///
+    /// Example:
+    /// ```swift
+    /// let noNumbers = InputGuard.custom("no_numbers") { input in
+    ///     input.rangeOfCharacter(from: .decimalDigits) == nil
+    ///         ? .passed()
+    ///         : .tripwire(message: "Numbers not allowed")
+    /// }
+    /// ```
+    static func custom(
+        _ name: String,
+        _ validate: @escaping @Sendable (String) async throws -> GuardrailResult
+    ) -> InputGuard {
+        InputGuard(name, validate)
     }
 }

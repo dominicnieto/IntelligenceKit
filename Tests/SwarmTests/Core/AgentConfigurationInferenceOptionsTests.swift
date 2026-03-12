@@ -47,12 +47,14 @@ struct AgentConfigurationInferenceOptionsTests {
             .maxTokens(123)
             .stopSequences(["STOP"])
             .parallelToolCalls(true)
+            .previousResponseId("resp_123")
 
         let options = config.inferenceOptions
         #expect(options.temperature == 0.5)
         #expect(options.maxTokens == 123)
         #expect(options.stopSequences == ["STOP"])
         #expect(options.parallelToolCalls == true)
+        #expect(options.previousResponseId == "resp_123")
         #expect(options.seed == nil)
         #expect(options.truncation == nil)
         #expect(options.verbosity == nil)

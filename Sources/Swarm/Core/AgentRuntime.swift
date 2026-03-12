@@ -337,6 +337,9 @@ public struct InferenceOptions: Sendable, Equatable {
     /// Provider-specific key/value options that should pass through untouched.
     public var providerSettings: [String: SendableValue]?
 
+    /// Provider response identifier used to continue a prior conversation when supported.
+    public var previousResponseId: String?
+
     /// Creates inference options.
     /// - Parameters:
     ///   - temperature: Generation temperature. Default: 1.0
@@ -352,6 +355,7 @@ public struct InferenceOptions: Sendable, Equatable {
     ///   - truncation: Truncation strategy. Default: nil
     ///   - verbosity: Verbosity preference. Default: nil
     ///   - providerSettings: Provider-specific pass-through settings. Default: nil
+    ///   - previousResponseId: Previous response identifier for conversation continuation. Default: nil
     public init(
         temperature: Double = 1.0,
         maxTokens: Int? = nil,
@@ -365,7 +369,8 @@ public struct InferenceOptions: Sendable, Equatable {
         parallelToolCalls: Bool? = nil,
         truncation: TruncationStrategy? = nil,
         verbosity: Verbosity? = nil,
-        providerSettings: [String: SendableValue]? = nil
+        providerSettings: [String: SendableValue]? = nil,
+        previousResponseId: String? = nil
     ) {
         self.temperature = temperature
         self.maxTokens = maxTokens
@@ -380,6 +385,7 @@ public struct InferenceOptions: Sendable, Equatable {
         self.truncation = truncation
         self.verbosity = verbosity
         self.providerSettings = providerSettings
+        self.previousResponseId = previousResponseId
     }
 
     // MARK: - Special Builder Methods

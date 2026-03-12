@@ -305,6 +305,16 @@ public actor Agent: AgentRuntime {
         currentTask?.cancel()
     }
 
+    public func runWithResponse(
+        _ input: String,
+        session: (any Session)? = nil,
+        observer: (any AgentObserver)? = nil
+    ) async throws -> AgentResponse {
+        let result = try await run(input, session: session, observer: observer)
+        let responseID = responseID(from: result)
+        return makeResponse(from: result, responseID: responseID)
+    }
+
     // MARK: Private
 
     // MARK: - Conversation History
@@ -337,6 +347,8 @@ public actor Agent: AgentRuntime {
     private var currentRunID: UUID?
     private var isCancelled: Bool = false
     private let toolRegistry: ToolRegistry
+    private static let autoResponseTracker = ResponseTracker()
+    private static let responseIDMetadataKey = "response.id"
 
     private func runInternal(_ input: String, session: (any Session)? = nil, observer: (any AgentObserver)? = nil) async throws -> AgentResult {
         guard !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -370,6 +382,8 @@ public actor Agent: AgentRuntime {
             // Reset cancellation state and create result builder
             let resultBuilder = AgentResult.Builder()
             _ = resultBuilder.start()
+            let responseID = UUID().uuidString
+            _ = resultBuilder.setMetadata(Self.responseIDMetadataKey, .string(responseID))
 
             // Load conversation history from session (limit to recent messages)
             var sessionHistory: [MemoryMessage] = []
@@ -388,9 +402,11 @@ public actor Agent: AgentRuntime {
             let userMessage = MemoryMessage.user(input)
 
             // Execute the tool calling loop with session context
+            let inferenceOptions = await resolvedInferenceOptions(session: session)
             let output = try await executeToolCallingLoop(
                 input: input,
                 sessionHistory: sessionHistory,
+                inferenceOptions: inferenceOptions,
                 resultBuilder: resultBuilder,
                 observer: observer,
                 tracing: tracing
@@ -414,6 +430,10 @@ public actor Agent: AgentRuntime {
 
             _ = resultBuilder.setMetadata(RuntimeMetadata.runtimeEngineKey, .string(RuntimeMetadata.hiveRuntimeEngineName))
             let result = resultBuilder.build()
+            if configuration.autoPreviousResponseId, let session {
+                let response = makeResponse(from: result, responseID: responseID)
+                await Self.autoResponseTracker.recordResponse(response, sessionId: session.sessionId)
+            }
             await tracing.traceComplete(result: result)
 
             // Notify observer of agent completion
@@ -486,11 +506,69 @@ public actor Agent: AgentRuntime {
         return DefaultMembraneAgentAdapter(configuration: membrane.configuration)
     }
 
+    private func resolvedInferenceOptions(session: (any Session)?) async -> InferenceOptions {
+        var options = configuration.inferenceOptions
+
+        if let explicit = configuration.previousResponseId?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !explicit.isEmpty {
+            options.previousResponseId = explicit
+            return options
+        }
+
+        guard configuration.autoPreviousResponseId, let session else {
+            return options
+        }
+
+        if let latestResponseID = await Self.autoResponseTracker.getLatestResponseId(for: session.sessionId) {
+            options.previousResponseId = latestResponseID
+        }
+
+        return options
+    }
+
+    private func responseID(from result: AgentResult) -> String {
+        if case let .string(value)? = result.metadata[Self.responseIDMetadataKey], !value.isEmpty {
+            return value
+        }
+        return UUID().uuidString
+    }
+
+    private func makeResponse(from result: AgentResult, responseID: String) -> AgentResponse {
+        let toolCallsById = Dictionary(uniqueKeysWithValues: result.toolCalls.map { ($0.id, $0) })
+        let toolCallRecords: [ToolCallRecord] = result.toolResults.compactMap { toolResult in
+            guard let toolCall = toolCallsById[toolResult.callId] else {
+                Log.agents.warning("Tool result missing matching call: \(toolResult.callId)")
+                return nil
+            }
+
+            return ToolCallRecord(
+                toolName: toolCall.toolName,
+                arguments: toolCall.arguments,
+                result: toolResult.output,
+                duration: toolResult.duration,
+                timestamp: toolCall.timestamp,
+                isSuccess: toolResult.isSuccess,
+                errorMessage: toolResult.errorMessage
+            )
+        }
+
+        return AgentResponse(
+            responseId: responseID,
+            output: result.output,
+            agentName: configuration.name,
+            metadata: result.metadata,
+            toolCalls: toolCallRecords,
+            usage: result.tokenUsage,
+            iterationCount: result.iterationCount
+        )
+    }
+
     // MARK: - Tool Calling Loop Implementation
 
     private func executeToolCallingLoop(
         input: String,
         sessionHistory: [MemoryMessage] = [],
+        inferenceOptions: InferenceOptions,
         resultBuilder: AgentResult.Builder,
         observer: (any AgentObserver)? = nil,
         tracing: TracingHelper? = nil
@@ -563,6 +641,7 @@ public actor Agent: AgentRuntime {
                         provider: provider,
                         prompt: prompt,
                         systemPrompt: systemMessage,
+                        inferenceOptions: inferenceOptions,
                         enableStreaming: enableStreaming,
                         observer: observer
                     )
@@ -576,6 +655,7 @@ public actor Agent: AgentRuntime {
                         provider: provider,
                         prompt: prompt,
                         tools: toolSchemas,
+                        inferenceOptions: inferenceOptions,
                         systemPrompt: systemMessage,
                         observer: observer
                     )
@@ -584,6 +664,7 @@ public actor Agent: AgentRuntime {
                         provider: provider,
                         prompt: prompt,
                         tools: toolSchemas,
+                        inferenceOptions: inferenceOptions,
                         systemPrompt: systemMessage,
                         observer: observer,
                         emitOutputTokens: enableStreaming
@@ -686,16 +767,18 @@ public actor Agent: AgentRuntime {
         provider: any InferenceProvider,
         prompt: String,
         systemPrompt: String,
+        inferenceOptions: InferenceOptions,
         enableStreaming: Bool = false,
         observer: (any AgentObserver)?
     ) async throws -> String {
         await observer?.onLLMStart(context: nil, agent: self, systemPrompt: systemPrompt, inputMessages: [MemoryMessage.user(prompt)])
 
+        let options = optionsWithMembraneRuntimeSettings(inferenceOptions)
         let content: String
         if enableStreaming {
             var streamedContent = ""
             streamedContent.reserveCapacity(1024)
-            let stream = provider.stream(prompt: prompt, options: configuration.inferenceOptions)
+            let stream = provider.stream(prompt: prompt, options: options)
             for try await token in stream {
                 if !token.isEmpty {
                     streamedContent += token
@@ -706,7 +789,7 @@ public actor Agent: AgentRuntime {
         } else {
             content = try await provider.generate(
                 prompt: prompt,
-                options: configuration.inferenceOptions
+                options: options
             )
         }
 
@@ -1020,11 +1103,12 @@ public actor Agent: AgentRuntime {
         provider: any InferenceProvider,
         prompt: String,
         tools: [ToolSchema],
+        inferenceOptions: InferenceOptions,
         systemPrompt: String,
         observer: (any AgentObserver)? = nil,
         emitOutputTokens: Bool = false
     ) async throws -> InferenceResponse {
-        var options = configuration.inferenceOptions
+        var options = inferenceOptions
         options = optionsWithMembraneRuntimeSettings(options)
 
         // Notify observer of LLM start
@@ -1051,10 +1135,11 @@ public actor Agent: AgentRuntime {
         provider: any ToolCallStreamingInferenceProvider,
         prompt: String,
         tools: [ToolSchema],
+        inferenceOptions: InferenceOptions,
         systemPrompt: String,
         observer: (any AgentObserver)? = nil
     ) async throws -> InferenceResponse {
-        var options = configuration.inferenceOptions
+        var options = inferenceOptions
         options = optionsWithMembraneRuntimeSettings(options)
 
         await observer?.onLLMStart(context: nil, agent: self, systemPrompt: systemPrompt, inputMessages: [MemoryMessage.user(prompt)])

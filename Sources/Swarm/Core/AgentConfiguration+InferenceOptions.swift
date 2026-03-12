@@ -34,7 +34,8 @@ public extension AgentConfiguration {
                 parallelToolCalls: settings.parallelToolCalls ?? parallelToolCalls,
                 truncation: settings.truncation,
                 verbosity: settings.verbosity,
-                providerSettings: settings.providerSettings
+                providerSettings: settings.providerSettings,
+                previousResponseId: previousResponseId
             )
         }
 
@@ -42,7 +43,8 @@ public extension AgentConfiguration {
             temperature: temperature,
             maxTokens: maxTokens,
             stopSequences: stopSequences,
-            parallelToolCalls: parallelToolCalls
+            parallelToolCalls: parallelToolCalls,
+            previousResponseId: previousResponseId
         )
     }
 }

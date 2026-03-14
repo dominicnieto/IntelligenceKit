@@ -34,10 +34,10 @@ import Foundation
 ///     systemPrompt: "Create a brief summary focusing on action items:"
 /// )
 /// ```
-public actor InferenceProviderSummarizer: Summarizer {
-    // MARK: Public
+actor InferenceProviderSummarizer: Summarizer {
+    // MARK: Internal
 
-    public var isAvailable: Bool {
+    var isAvailable: Bool {
         get async { true }
     }
 
@@ -47,7 +47,7 @@ public actor InferenceProviderSummarizer: Summarizer {
     ///   - provider: The inference provider to use for summarization.
     ///   - systemPrompt: The prompt prefix for summarization requests.
     ///   - temperature: Temperature for generation (default: 0.3 for consistency).
-    public init(
+    init(
         provider: any InferenceProvider,
         systemPrompt: String = "Summarize the following conversation concisely, preserving key information and context:",
         temperature: Double = 0.3
@@ -59,7 +59,7 @@ public actor InferenceProviderSummarizer: Summarizer {
 
     // MARK: - Summarizer Protocol
 
-    public func summarize(_ text: String, maxTokens: Int) async throws -> String {
+    func summarize(_ text: String, maxTokens: Int) async throws -> String {
         // Truncate input to prevent excessive token usage
         let maxInputLength = 50000 // Reasonable limit for most LLMs
         let truncatedText = text.count > maxInputLength
@@ -107,7 +107,7 @@ public actor InferenceProviderSummarizer: Summarizer {
 
 // MARK: - Convenience Extensions
 
-public extension InferenceProviderSummarizer {
+extension InferenceProviderSummarizer {
     /// Creates a summarizer optimized for conversation summaries.
     ///
     /// - Parameter provider: The inference provider to use.

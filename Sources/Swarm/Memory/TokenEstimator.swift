@@ -80,21 +80,21 @@ public struct CharacterBasedTokenEstimator: TokenEstimator, Sendable {
 /// let tokens = estimator.estimateTokens(for: "Hello world")
 /// // tokens ≈ 3 (2 words × 1.3)
 /// ```
-public struct WordBasedTokenEstimator: TokenEstimator, Sendable {
+struct WordBasedTokenEstimator: TokenEstimator, Sendable {
     /// Shared instance with default configuration.
-    public static let shared = WordBasedTokenEstimator()
+    static let shared = WordBasedTokenEstimator()
 
     /// Tokens per word ratio (default: 1.3).
-    public let tokensPerWord: Double
+    let tokensPerWord: Double
 
     /// Creates a word-based token estimator.
     ///
     /// - Parameter tokensPerWord: Average tokens per word (default: 1.3).
-    public init(tokensPerWord: Double = 1.3) {
+    init(tokensPerWord: Double = 1.3) {
         self.tokensPerWord = max(0.1, tokensPerWord)
     }
 
-    public func estimateTokens(for text: String) -> Int {
+    func estimateTokens(for text: String) -> Int {
         let wordCount = text.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count
         return max(1, Int(Double(wordCount) * tokensPerWord))
     }
@@ -105,11 +105,11 @@ public struct WordBasedTokenEstimator: TokenEstimator, Sendable {
 /// Combines multiple estimators and returns the average.
 ///
 /// Useful for getting a more balanced estimate when the text type is unknown.
-public struct AveragingTokenEstimator: TokenEstimator, Sendable {
-    // MARK: Public
+struct AveragingTokenEstimator: TokenEstimator, Sendable {
+    // MARK: Internal
 
     /// Default instance combining character and word-based estimators.
-    public static let shared = AveragingTokenEstimator(estimators: [
+    static let shared = AveragingTokenEstimator(estimators: [
         CharacterBasedTokenEstimator.shared,
         WordBasedTokenEstimator.shared
     ])
@@ -117,13 +117,13 @@ public struct AveragingTokenEstimator: TokenEstimator, Sendable {
     /// Creates an averaging token estimator.
     ///
     /// - Parameter estimators: The estimators to average.
-    public init(estimators: [any TokenEstimator]) {
+    init(estimators: [any TokenEstimator]) {
         self.estimators = estimators.isEmpty
             ? [CharacterBasedTokenEstimator.shared]
             : estimators
     }
 
-    public func estimateTokens(for text: String) -> Int {
+    func estimateTokens(for text: String) -> Int {
         let total = estimators.reduce(0) { $0 + $1.estimateTokens(for: text) }
         return max(1, total / estimators.count)
     }

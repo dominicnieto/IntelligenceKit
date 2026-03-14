@@ -141,14 +141,14 @@ public enum EmbeddingError: Error, Sendable, CustomStringConvertible {
 // MARK: - EmbeddingUtils
 
 /// Utility functions for working with embeddings
-public enum EmbeddingUtils {
+enum EmbeddingUtils {
     /// Calculate cosine similarity between two vectors
     ///
     /// - Parameters:
     ///   - vec1: First vector
     ///   - vec2: Second vector
     /// - Returns: Similarity score between -1 and 1 (1 = identical)
-    public static func cosineSimilarity(_ vec1: [Float], _ vec2: [Float]) -> Float {
+    static func cosineSimilarity(_ vec1: [Float], _ vec2: [Float]) -> Float {
         guard vec1.count == vec2.count, !vec1.isEmpty else { return 0 }
 
         var dotProduct: Float = 0
@@ -171,7 +171,7 @@ public enum EmbeddingUtils {
     ///   - embedding1: First vector
     ///   - embedding2: Second vector
     /// - Returns: Euclidean distance (lower = more similar)
-    public static func euclideanDistance(_ embedding1: [Float], _ embedding2: [Float]) -> Float {
+    static func euclideanDistance(_ embedding1: [Float], _ embedding2: [Float]) -> Float {
         guard embedding1.count == embedding2.count else { return Float.infinity }
 
         var sum: Float = 0
@@ -187,7 +187,7 @@ public enum EmbeddingUtils {
     ///
     /// - Parameter vector: The vector to normalize
     /// - Returns: Unit vector (magnitude = 1)
-    public static func normalize(_ vector: [Float]) -> [Float] {
+    static func normalize(_ vector: [Float]) -> [Float] {
         let magnitude = sqrt(vector.reduce(0) { $0 + $1 * $1 })
         guard magnitude > 0 else { return vector }
         return vector.map { $0 / magnitude }

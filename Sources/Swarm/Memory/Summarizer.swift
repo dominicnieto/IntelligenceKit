@@ -135,10 +135,10 @@ public struct TruncatingSummarizer: Summarizer, Sendable {
     /// }
     /// ```
     @available(macOS 26.0, iOS 26.0, watchOS 26.0, tvOS 26.0, visionOS 26.0, *)
-    public actor FoundationModelsSummarizer: Summarizer {
-        // MARK: Public
+    actor FoundationModelsSummarizer: Summarizer {
+        // MARK: Internal
 
-        public var isAvailable: Bool {
+        var isAvailable: Bool {
             get async {
                 let model = SystemLanguageModel.default
                 let availability = model.availability
@@ -147,9 +147,9 @@ public struct TruncatingSummarizer: Summarizer, Sendable {
         }
 
         /// Creates a Foundation Models summarizer.
-        public init() {}
+        init() {}
 
-        public func summarize(_ text: String, maxTokens _: Int) async throws -> String {
+        func summarize(_ text: String, maxTokens _: Int) async throws -> String {
             guard await isAvailable else {
                 throw SummarizerError.unavailable
             }
@@ -182,7 +182,7 @@ public struct TruncatingSummarizer: Summarizer, Sendable {
         }
 
         /// Resets the language model session.
-        public func resetSession() {
+        func resetSession() {
             session = nil
         }
 
@@ -198,10 +198,10 @@ public struct TruncatingSummarizer: Summarizer, Sendable {
 ///
 /// Attempts the primary summarizer first, falling back to alternatives
 /// if the primary fails or is unavailable.
-public struct FallbackSummarizer: Summarizer, Sendable {
-    // MARK: Public
+struct FallbackSummarizer: Summarizer, Sendable {
+    // MARK: Internal
 
-    public var isAvailable: Bool {
+    var isAvailable: Bool {
         get async {
             let primaryAvailable = await primary.isAvailable
             let fallbackAvailable = await fallback.isAvailable
@@ -214,12 +214,12 @@ public struct FallbackSummarizer: Summarizer, Sendable {
     /// - Parameters:
     ///   - primary: The preferred summarizer to try first.
     ///   - fallback: The backup summarizer if primary fails.
-    public init(primary: any Summarizer, fallback: any Summarizer = TruncatingSummarizer.shared) {
+    init(primary: any Summarizer, fallback: any Summarizer = TruncatingSummarizer.shared) {
         self.primary = primary
         self.fallback = fallback
     }
 
-    public func summarize(_ text: String, maxTokens: Int) async throws -> String {
+    func summarize(_ text: String, maxTokens: Int) async throws -> String {
         // Try primary first
         if await primary.isAvailable {
             do {

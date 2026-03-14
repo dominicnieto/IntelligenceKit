@@ -124,6 +124,7 @@ public protocol ToolChainStep: Sendable {
 
 // MARK: - Tool Extension
 
+@available(*, deprecated, message: "ToolChain DSL is deprecated. Use direct async/await tool composition instead.")
 public extension AnyJSONTool {
     /// Executes this tool as a chain step.
     ///

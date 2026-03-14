@@ -43,14 +43,14 @@ public struct LLM: Sendable, InferenceProvider {
 
     public static func anthropic(
         apiKey: String,
-        model: String = AnthropicModelID.claude35Sonnet.rawValue
+        model: String = "claude-3-5-sonnet-20241022"
     ) -> LLM {
         LLM(kind: .anthropic(AnthropicConfig(apiKey: apiKey, model: model)))
     }
 
     public static func anthropic(
         key: String,
-        model: String = AnthropicModelID.claude35Sonnet.rawValue
+        model: String = "claude-3-5-sonnet-20241022"
     ) -> LLM {
         anthropic(apiKey: key, model: model)
     }
@@ -217,11 +217,11 @@ public extension InferenceProvider where Self == LLM {
         LLM.openAI(key: key, model: model)
     }
 
-    static func anthropic(apiKey: String, model: String = AnthropicModelID.claude35Sonnet.rawValue) -> LLM {
+    static func anthropic(apiKey: String, model: String = "claude-3-5-sonnet-20241022") -> LLM {
         LLM.anthropic(apiKey: apiKey, model: model)
     }
 
-    static func anthropic(key: String, model: String = AnthropicModelID.claude35Sonnet.rawValue) -> LLM {
+    static func anthropic(key: String, model: String = "claude-3-5-sonnet-20241022") -> LLM {
         LLM.anthropic(key: key, model: model)
     }
 

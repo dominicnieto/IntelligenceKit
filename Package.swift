@@ -45,7 +45,7 @@ if useLocalDeps {
         .package(url: "https://github.com/christopherkarani/Wax.git", exact: "0.1.18"),
         .package(
             url: "https://github.com/christopherkarani/Conduit",
-            exact: "0.3.5",
+            exact: "0.3.8",
             traits: [
                 .trait(name: "OpenAI"),
                 .trait(name: "OpenRouter"),

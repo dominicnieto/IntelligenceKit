@@ -42,7 +42,7 @@ if useLocalDeps {
     ]
 } else {
     packageDependencies += [
-        .package(url: "https://github.com/christopherkarani/Wax.git", exact: "0.1.18"),
+        .package(url: "https://github.com/christopherkarani/Wax.git", exact: "0.1.19"),
         .package(
             url: "https://github.com/christopherkarani/Conduit",
             exact: "0.3.10",
@@ -52,8 +52,8 @@ if useLocalDeps {
                 .trait(name: "Anthropic"),
             ]
         ),
-        .package(url: "https://github.com/christopherkarani/Membrane", exact: "0.1.1"),
-        .package(url: "https://github.com/christopherkarani/Hive", exact: "0.1.7"),
+        .package(url: "https://github.com/christopherkarani/Membrane", exact: "0.1.2"),
+        .package(url: "https://github.com/christopherkarani/Hive", exact: "0.1.8"),
     ]
 }
 

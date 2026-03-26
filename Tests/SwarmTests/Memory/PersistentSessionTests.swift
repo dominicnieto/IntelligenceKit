@@ -43,7 +43,7 @@
             if !SwiftDataTestGate.canRun { return }
             let session = try PersistentSession.inMemory(sessionId: "test-session")
 
-            let sessionId = await session.sessionId
+            let sessionId = session.sessionId
             #expect(sessionId == "test-session")
             #expect(await session.isEmpty == true)
         }
@@ -69,7 +69,7 @@
 
             let session = try PersistentSession.persistent(sessionId: "persistent-test")
 
-            let sessionId = await session.sessionId
+            let sessionId = session.sessionId
             #expect(sessionId == "persistent-test")
         }
 
@@ -79,8 +79,8 @@
             let session1 = try PersistentSession.inMemory(sessionId: "session-1")
             let session2 = try PersistentSession.inMemory(sessionId: "session-2")
 
-            let id1 = await session1.sessionId
-            let id2 = await session2.sessionId
+            let id1 = session1.sessionId
+            let id2 = session2.sessionId
 
             #expect(id1 == "session-1")
             #expect(id2 == "session-2")
@@ -94,7 +94,7 @@
             let backend = try SwiftDataBackend.inMemory()
             let session = PersistentSession(sessionId: "custom-backend-test", backend: backend)
 
-            let sessionId = await session.sessionId
+            let sessionId = session.sessionId
             #expect(sessionId == "custom-backend-test")
         }
 
@@ -632,13 +632,13 @@
             if !SwiftDataTestGate.canRun { return }
             let session = try PersistentSession.inMemory(sessionId: "constant-id")
 
-            let id1 = await session.sessionId
+            let id1 = session.sessionId
 
             try await session.addItem(MemoryMessage.user("Test"))
-            let id2 = await session.sessionId
+            let id2 = session.sessionId
 
             try await session.clearSession()
-            let id3 = await session.sessionId
+            let id3 = session.sessionId
 
             #expect(id1 == "constant-id")
             #expect(id2 == "constant-id")

@@ -311,8 +311,8 @@ struct InputGuardrailTests {
         let guardrail = InputGuard("TypeTest") { _, _ in .passed() }
 
         // Then
-        #expect(guardrail is InputGuard)
-        #expect(guardrail is any InputGuardrail)
+        let erased: any InputGuardrail = guardrail
+        _ = erased
     }
 
     @Test("InputGuard preserves name")

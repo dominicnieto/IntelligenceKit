@@ -72,3 +72,4 @@ package.json
 
 # SPM resolved file (library — consumers resolve their own deps)
 Package.resolved
+marketing/

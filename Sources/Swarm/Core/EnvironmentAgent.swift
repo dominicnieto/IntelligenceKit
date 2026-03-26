@@ -98,6 +98,11 @@ public extension AgentRuntime {
         environment(\.memory, memory)
     }
 
+    /// Applies a prompt token counter via the environment for the duration of execution.
+    func promptTokenCounter(_ counter: any PromptTokenCounter) -> EnvironmentAgent {
+        environment(\.promptTokenCounter, counter)
+    }
+
     /// Applies a web-search configuration via the environment for the duration of execution.
     func webSearch(_ configuration: WebSearchTool.Configuration) -> EnvironmentAgent {
         environment(\.webSearch, configuration)

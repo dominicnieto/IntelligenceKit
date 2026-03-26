@@ -87,3 +87,12 @@ public extension StreamingConversationInferenceProvider {
         stream(prompt: InferenceMessage.flattenPrompt(messages), options: options)
     }
 }
+
+extension TextOnlyConversationInferenceProviderAdapter: PromptTokenCountingInferenceProvider {
+    public func countTokens(in text: String) async throws -> Int {
+        if let countingBase = base as? any PromptTokenCountingInferenceProvider {
+            return try await countingBase.countTokens(in: text)
+        }
+        return CharacterBasedTokenEstimator.shared.estimateTokens(for: text)
+    }
+}

@@ -3,15 +3,9 @@
 //
 // Lightweight OpenRouter routing configuration without exposing Conduit types.
 
-#if canImport(ConduitAdvanced)
 import ConduitAdvanced
 typealias ConduitOpenRouterProvider = ConduitAdvanced.OpenRouterProvider
 typealias ConduitOpenRouterDataCollection = ConduitAdvanced.OpenRouterDataCollection
-#else
-import Conduit
-typealias ConduitOpenRouterProvider = Conduit.OpenRouterProvider
-typealias ConduitOpenRouterDataCollection = Conduit.OpenRouterDataCollection
-#endif
 import Foundation
 
 /// OpenRouter routing preferences.
@@ -85,7 +79,7 @@ public enum OpenRouterDataCollectionPolicy: String, Sendable, Hashable, CaseIter
     case deny
 }
 
-private extension OpenRouterProvider {
+extension OpenRouterProvider {
     var toConduit: ConduitOpenRouterProvider {
         switch self {
         case .openai:

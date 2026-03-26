@@ -79,8 +79,17 @@ public struct AgentMacro: MemberMacro, ExtensionMacro {
         // 4. Generate memory property
         if !existingMembers.contains("memory") {
             members.append("""
-                nonisolated public var memory: (any Memory)? { _memory ?? AgentEnvironmentValues.current.memory }
+                nonisolated public var memory: (any Memory)? { _memory }
                 private nonisolated let _memory: (any Memory)?
+                private nonisolated let _defaultMemory: (any Memory)?
+
+                private nonisolated func resolvedMemory() -> (any Memory)? {
+                    _memory ?? AgentEnvironmentValues.current.memory ?? _defaultMemory
+                }
+
+                private static func makeDefaultMemory() -> (any Memory)? {
+                    try? DefaultAgentMemory()
+                }
                 """)
         }
 
@@ -122,6 +131,7 @@ public struct AgentMacro: MemberMacro, ExtensionMacro {
                     self.instructions = instructions
                     self.configuration = configuration
                     self._memory = memory
+                    self._defaultMemory = memory == nil ? Self.makeDefaultMemory() : nil
                     self._inferenceProvider = inferenceProvider
                     self._tracer = tracer
                 }
@@ -143,7 +153,7 @@ public struct AgentMacro: MemberMacro, ExtensionMacro {
                         }
 
                         let activeTracer = tracer ?? AgentEnvironmentValues.current.tracer
-                        let activeMemory = memory ?? AgentEnvironmentValues.current.memory
+                        let activeMemory = resolvedMemory()
                         let lifecycleMemory = activeMemory as? any MemorySessionLifecycle
 
                         let tracing = TracingHelper(
@@ -173,8 +183,12 @@ public struct AgentMacro: MemberMacro, ExtensionMacro {
                             if let mem = activeMemory {
                                 // Seed session history only once for a fresh memory instance.
                                 if session != nil, await mem.isEmpty, !sessionHistory.isEmpty {
-                                    for msg in sessionHistory {
-                                        await mem.add(msg)
+                                    if let replayAware = mem as? any MemorySessionReplayAware {
+                                        await replayAware.importSessionHistory(sessionHistory)
+                                    } else {
+                                        for msg in sessionHistory {
+                                            await mem.add(msg)
+                                        }
                                     }
                                 }
                                 await mem.add(userMessage)

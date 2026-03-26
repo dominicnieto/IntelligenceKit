@@ -7,9 +7,21 @@ let packageRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
 let includeDemo = ProcessInfo.processInfo.environment["SWARM_INCLUDE_DEMO"] == "1"
 let useLocalDeps = ProcessInfo.processInfo.environment["AISTACK_USE_LOCAL_DEPS"] == "1"
 
+func localDependencyPath(_ name: String) -> String {
+    let candidateRoots = [
+        packageRoot.appendingPathComponent("../\(name)").standardizedFileURL.path,
+        packageRoot.appendingPathComponent("../../\(name)").standardizedFileURL.path,
+    ]
+
+    for path in candidateRoots where FileManager.default.fileExists(atPath: path) {
+        return path
+    }
+
+    return candidateRoots[0]
+}
+
 var packageProducts: [Product] = [
     .library(name: "Swarm", targets: ["Swarm"]),
-    .library(name: "SwarmHive", targets: ["SwarmHive"]),
     .library(name: "SwarmMembrane", targets: ["SwarmMembrane"]),
     .library(name: "SwarmMCP", targets: ["SwarmMCP"]),
 ]
@@ -28,20 +40,22 @@ var packageDependencies: [Package.Dependency] = [
 
 if useLocalDeps {
     packageDependencies += [
-        .package(path: packageRoot.appendingPathComponent("../Wax").path),
+        .package(path: localDependencyPath("Wax")),
         .package(
-            path: packageRoot.appendingPathComponent("../Conduit").path,
+            path: localDependencyPath("Conduit"),
             traits: [
                 .trait(name: "OpenAI"),
                 .trait(name: "OpenRouter"),
                 .trait(name: "Anthropic"),
             ]
         ),
-        .package(path: packageRoot.appendingPathComponent("../Membrane").path),
-        .package(path: packageRoot.appendingPathComponent("../Hive").path),
+        .package(path: localDependencyPath("ContextCore")),
+        .package(path: localDependencyPath("Membrane")),
+        .package(path: localDependencyPath("Hive")),
     ]
 } else {
     packageDependencies += [
+        // Production graph must resolve to the published tag set that is known to build together.
         .package(url: "https://github.com/christopherkarani/Wax.git", exact: "0.1.19"),
         .package(
             url: "https://github.com/christopherkarani/Conduit",
@@ -52,8 +66,9 @@ if useLocalDeps {
                 .trait(name: "Anthropic"),
             ]
         ),
-        .package(url: "https://github.com/christopherkarani/Membrane", exact: "0.1.2"),
-        .package(url: "https://github.com/christopherkarani/Hive", exact: "0.1.8"),
+        .package(url: "https://github.com/christopherkarani/ContextCore.git", exact: "1.0.0"),
+        .package(url: "https://github.com/christopherkarani/Membrane", exact: "0.1.3"),
+        .package(url: "https://github.com/christopherkarani/Hive", exact: "0.1.9"),
     ]
 }
 
@@ -63,19 +78,17 @@ var swarmDependencies: [Target.Dependency] = [
     .product(name: "SwiftSoup", package: "SwiftSoup"),
     .product(name: "Wax", package: "Wax"),
     .product(name: "Conduit", package: "Conduit"),
+    .product(name: "ConduitAdvanced", package: "Conduit"),
+    .product(name: "ContextCore", package: "ContextCore"),
     .product(name: "HiveCore", package: "Hive"),
-    .product(name: "Membrane", package: "Membrane", condition: .when(traits: ["membrane"])),
-    .product(name: "MembraneHive", package: "Membrane", condition: .when(traits: ["membrane"]))
+    .product(name: "Membrane", package: "Membrane"),
+    .product(name: "MembraneCore", package: "Membrane"),
+    .product(name: "MembraneHive", package: "Membrane")
 ]
-
-if useLocalDeps {
-    swarmDependencies.append(.product(name: "ConduitAdvanced", package: "Conduit"))
-}
 
 var swarmSwiftSettings: [SwiftSetting] = [
     .enableExperimentalFeature("StrictConcurrency"),
     .define("SWARM_HIVE", .when(traits: ["hive"])),
-    .define("SWARM_MEMBRANE", .when(traits: ["membrane"]))
 ]
 
 var packageTargets: [Target] = [
@@ -97,18 +110,6 @@ var packageTargets: [Target] = [
     .target(
         name: "Swarm",
         dependencies: swarmDependencies,
-        exclude: [
-            "HiveSwarm",
-        ],
-        swiftSettings: swarmSwiftSettings
-    ),
-    .target(
-        name: "SwarmHive",
-        dependencies: [
-            "Swarm",
-            .product(name: "HiveCore", package: "Hive"),
-        ],
-        path: "Sources/Swarm/HiveSwarm",
         swiftSettings: swarmSwiftSettings
     ),
     .target(
@@ -132,17 +133,14 @@ var packageTargets: [Target] = [
     .testTarget(
         name: "SwarmTests",
         dependencies: {
-            var dependencies: [Target.Dependency] = [
+            let dependencies: [Target.Dependency] = [
                 "Swarm",
-                "SwarmHive",
                 "SwarmMCP",
                 .product(name: "Conduit", package: "Conduit"),
-                .product(name: "Membrane", package: "Membrane", condition: .when(traits: ["membrane"])),
-                .product(name: "MembraneCore", package: "Membrane", condition: .when(traits: ["membrane"])),
+                .product(name: "ConduitAdvanced", package: "Conduit"),
+                .product(name: "Membrane", package: "Membrane"),
+                .product(name: "MembraneCore", package: "Membrane"),
             ]
-            if useLocalDeps {
-                dependencies.append(.product(name: "ConduitAdvanced", package: "Conduit"))
-            }
             return dependencies
         }(),
         resources: [
@@ -155,7 +153,6 @@ var packageTargets: [Target] = [
         name: "HiveSwarmTests",
         dependencies: [
             "Swarm",
-            "SwarmHive",
             .product(name: "HiveCore", package: "Hive")
         ],
         swiftSettings: swarmSwiftSettings
@@ -209,10 +206,6 @@ let package = Package(
         .trait(
             name: "hive",
             description: "Enable Hive-backed workflow and runtime integration features."
-        ),
-        .trait(
-            name: "membrane",
-            description: "Enable Membrane-based planning and tool output transformations."
         ),
     ],
     dependencies: packageDependencies,

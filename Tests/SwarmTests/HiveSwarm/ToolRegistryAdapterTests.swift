@@ -1,7 +1,6 @@
 import Foundation
 import HiveCore
 @testable import Swarm
-@testable import SwarmHive
 import Testing
 
 @Suite("ToolRegistryAdapter Tests")

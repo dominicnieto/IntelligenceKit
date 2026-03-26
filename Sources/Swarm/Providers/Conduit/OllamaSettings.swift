@@ -3,11 +3,7 @@
 //
 // Lightweight Ollama settings without exposing Conduit types.
 
-#if canImport(ConduitAdvanced)
 import ConduitAdvanced
-#else
-import Conduit
-#endif
 
 /// Configuration for Ollama local inference.
 ///

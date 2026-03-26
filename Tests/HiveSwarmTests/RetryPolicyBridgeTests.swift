@@ -4,9 +4,9 @@
 // Tests for RetryPolicyBridge and ChatGraph retry behavior.
 
 import Foundation
+import HiveCore
 import Testing
 @testable import Swarm
-@testable import SwarmHive
 
 @Suite("RetryPolicyBridge — Swarm to Hive mapping")
 struct RetryPolicyBridgeTests {

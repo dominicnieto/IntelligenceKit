@@ -1,6 +1,5 @@
 import Foundation
 import HiveCore
-import Swarm
 
 enum ToolRegistryAdapterError: Error, Equatable, Sendable {
     case invalidArgumentsJSON

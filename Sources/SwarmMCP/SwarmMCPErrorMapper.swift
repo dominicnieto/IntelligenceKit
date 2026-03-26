@@ -61,20 +61,20 @@ enum SwarmMCPErrorMapper {
     static func mapToolResult(_ value: SendableValue) -> CallTool.Result {
         switch value {
         case let .string(stringValue):
-            return CallTool.Result(content: [.text(stringValue)], isError: false)
+            return CallTool.Result(content: [textContent(stringValue)], isError: false)
         case .null:
-            return CallTool.Result(content: [.text("null")], isError: false)
+            return CallTool.Result(content: [textContent("null")], isError: false)
         case let .bool(boolValue):
-            return CallTool.Result(content: [.text(boolValue.description)], isError: false)
+            return CallTool.Result(content: [textContent(boolValue.description)], isError: false)
         case let .int(intValue):
-            return CallTool.Result(content: [.text(intValue.description)], isError: false)
+            return CallTool.Result(content: [textContent(intValue.description)], isError: false)
         case let .double(doubleValue):
-            return CallTool.Result(content: [.text(doubleValue.description)], isError: false)
+            return CallTool.Result(content: [textContent(doubleValue.description)], isError: false)
         case .array, .dictionary:
             let resultValue = SwarmMCPValueMapper.mcpValue(from: value)
             let jsonText = jsonText(from: resultValue) ?? "{}"
             let content: [MCP.Tool.Content] = [
-                .text(jsonText),
+                textContent(jsonText),
                 .resource(
                     resource: .text(
                         jsonText,
@@ -245,7 +245,7 @@ enum SwarmMCPErrorMapper {
         let metadataValue = Value.object(metadata)
         let metadataText = jsonText(from: metadataValue) ?? "{}"
         let content: [MCP.Tool.Content] = [
-            .text(message),
+            textContent(message),
             .resource(
                 resource: .text(
                     metadataText,
@@ -268,5 +268,9 @@ enum SwarmMCPErrorMapper {
             return nil
         }
         return String(data: data, encoding: .utf8)
+    }
+
+    private static func textContent(_ text: String) -> MCP.Tool.Content {
+        .text(text: text, annotations: nil, _meta: nil)
     }
 }

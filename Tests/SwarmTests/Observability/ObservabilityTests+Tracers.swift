@@ -27,7 +27,7 @@ struct ConsoleTracerTests {
         await tracer.trace(.custom(traceId: traceId, message: "Critical", level: .critical))
 
         // Test passes if no crash occurs during filtering
-        #expect(true)
+        #expect(Bool(true))
     }
 
     @Test("ConsoleTracer formats all event kinds without crashing")
@@ -46,7 +46,7 @@ struct ConsoleTracerTests {
         await tracer.trace(.custom(traceId: traceId, message: "custom"))
 
         // Test passes if all events are formatted without crash
-        #expect(true)
+        #expect(Bool(true))
     }
 
     @Test("ConsoleTracer handles events with metadata")
@@ -67,7 +67,7 @@ struct ConsoleTracerTests {
         await tracer.trace(event)
 
         // Test passes if metadata formatting doesn't crash
-        #expect(true)
+        #expect(Bool(true))
     }
 
     @Test("ConsoleTracer handles events with errors")
@@ -89,7 +89,7 @@ struct ConsoleTracerTests {
         await tracer.trace(event)
 
         // Test passes if error formatting doesn't crash
-        #expect(true)
+        #expect(Bool(true))
     }
 }
 
@@ -109,6 +109,6 @@ struct PrettyConsoleTracerTests {
         await tracer.trace(.custom(traceId: traceId, message: "Custom event"))
 
         // Test passes if all formatting completes without crash
-        #expect(true)
+        #expect(Bool(true))
     }
 }

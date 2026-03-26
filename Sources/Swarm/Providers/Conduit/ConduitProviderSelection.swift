@@ -3,11 +3,7 @@
 //
 // Minimal Conduit-backed provider selection for Swarm.
 
-#if canImport(ConduitAdvanced)
 import ConduitAdvanced
-#else
-import Conduit
-#endif
 import Foundation
 
 /// Convenience selection for Conduit-backed inference providers.
@@ -191,11 +187,10 @@ public enum ConduitProviderSelection: Sendable, InferenceProvider {
         model: String,
         routing: OpenRouterRouting?
     ) -> ConduitProviderSelection {
-        let provider: OpenAIProvider
-        if let routing {
-            provider = OpenAIProvider(openRouterKey: apiKey, routing: routing.toConduit())
+        let provider = if let routing {
+            OpenAIProvider(openRouterKey: apiKey, routing: routing.toConduit())
         } else {
-            provider = OpenAIProvider(openRouterKey: apiKey)
+            OpenAIProvider(openRouterKey: apiKey)
         }
         let modelID = openAIModelID(model)
         let bridge = ConduitInferenceProvider(provider: provider, model: modelID)

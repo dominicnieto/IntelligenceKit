@@ -174,7 +174,7 @@ struct WorkflowHiveEngine: Sendable {
         builder.addNode(WorkflowNodeID.execute, workflowNode)
         builder.addRouter(from: WorkflowNodeID.execute) { store in
             let completed = (try? store.get(WorkflowHiveSchema.completedKey)) ?? false
-            return completed ? .end : .nodes([WorkflowNodeID.execute])
+            return completed ? .end : .to([WorkflowNodeID.execute])
         }
         return try builder.compile()
     }

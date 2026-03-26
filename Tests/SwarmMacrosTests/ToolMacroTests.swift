@@ -12,10 +12,12 @@ import XCTest
 #if canImport(SwarmMacros)
     import SwarmMacros
 
-    let toolMacros: [String: Macro.Type] = [
+    private func toolMacros() -> [String: Macro.Type] {
+        [
         "Tool": ToolMacro.self,
         "Parameter": ParameterMacro.self
-    ]
+        ]
+    }
 #endif
 
 // MARK: - ToolMacroTests
@@ -77,7 +79,7 @@ final class ToolMacroTests: XCTestCase {
                 extension CalculatorTool: Tool, Sendable {
                 }
                 """,
-                macros: toolMacros
+                macros: toolMacros()
             )
         #else
             throw XCTSkip("macros are only supported when running tests for the host platform")
@@ -150,7 +152,7 @@ final class ToolMacroTests: XCTestCase {
                 extension WeatherTool: Tool, Sendable {
                 }
                 """,
-                macros: toolMacros
+                macros: toolMacros()
             )
         #else
             throw XCTSkip("macros are only supported when running tests for the host platform")
@@ -211,7 +213,7 @@ final class ToolMacroTests: XCTestCase {
                 extension FormatTool: Tool, Sendable {
                 }
                 """,
-                macros: toolMacros
+                macros: toolMacros()
             )
         #else
             throw XCTSkip("macros are only supported when running tests for the host platform")
@@ -272,7 +274,7 @@ final class ToolMacroTests: XCTestCase {
                 extension CountTool: Tool, Sendable {
                 }
                 """,
-                macros: toolMacros
+                macros: toolMacros()
             )
         #else
             throw XCTSkip("macros are only supported when running tests for the host platform")
@@ -333,7 +335,7 @@ final class ToolMacroTests: XCTestCase {
                 extension ToggleTool: Tool, Sendable {
                 }
                 """,
-                macros: toolMacros
+                macros: toolMacros()
             )
         #else
             throw XCTSkip("macros are only supported when running tests for the host platform")
@@ -363,7 +365,7 @@ final class ToolMacroTests: XCTestCase {
                 diagnostics: [
                     DiagnosticSpec(message: "@Tool requires a description string argument", line: 1, column: 1)
                 ],
-                macros: toolMacros
+                macros: toolMacros()
             )
         #else
             throw XCTSkip("macros are only supported when running tests for the host platform")
@@ -391,7 +393,7 @@ final class ToolMacroTests: XCTestCase {
                 diagnostics: [
                     DiagnosticSpec(message: "@Tool can only be applied to structs", line: 1, column: 1)
                 ],
-                macros: toolMacros
+                macros: toolMacros()
             )
         #else
             throw XCTSkip("macros are only supported when running tests for the host platform")
@@ -440,7 +442,7 @@ final class ToolMacroTests: XCTestCase {
                 extension MyAwesomeTool: Tool, Sendable {
                 }
                 """,
-                macros: toolMacros
+                macros: toolMacros()
             )
         #else
             throw XCTSkip("macros are only supported when running tests for the host platform")

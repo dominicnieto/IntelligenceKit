@@ -517,7 +517,7 @@ final class APIAuditTests: XCTestCase {
 
     func testAgentContextInitialization() async {
         let context = AgentContext(input: "Hello")
-        let input = await context.originalInput
+        let input = context.originalInput
         XCTAssertEqual(input, "Hello")
     }
 

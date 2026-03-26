@@ -12,9 +12,11 @@ import XCTest
 #if canImport(SwarmMacros)
     import SwarmMacros
 
-    let inlineToolMacros: [String: Macro.Type] = [
+    private func inlineToolMacros() -> [String: Macro.Type] {
+        [
         "Tool": InlineToolMacro.self,
-    ]
+        ]
+    }
 #endif
 
 // MARK: - InlineToolMacroTests
@@ -51,7 +53,7 @@ final class InlineToolMacroTests: XCTestCase {
                     return _InlineTool_greet()
                 }()
                 """,
-                macros: inlineToolMacros
+                macros: inlineToolMacros()
             )
         #else
             throw XCTSkip("macros are only supported when running tests for the host platform")
@@ -90,7 +92,7 @@ final class InlineToolMacroTests: XCTestCase {
                     return _InlineTool_greet()
                 }()
                 """,
-                macros: inlineToolMacros
+                macros: inlineToolMacros()
             )
         #else
             throw XCTSkip("macros are only supported when running tests for the host platform")
@@ -129,7 +131,7 @@ final class InlineToolMacroTests: XCTestCase {
                     return _InlineTool_greet()
                 }()
                 """,
-                macros: inlineToolMacros
+                macros: inlineToolMacros()
             )
         #else
             throw XCTSkip("macros are only supported when running tests for the host platform")
@@ -163,7 +165,7 @@ final class InlineToolMacroTests: XCTestCase {
                     return _InlineTool_ping()
                 }()
                 """,
-                macros: inlineToolMacros
+                macros: inlineToolMacros()
             )
         #else
             throw XCTSkip("macros are only supported when running tests for the host platform")
@@ -200,7 +202,7 @@ final class InlineToolMacroTests: XCTestCase {
                     return _InlineTool_toggle()
                 }()
                 """,
-                macros: inlineToolMacros
+                macros: inlineToolMacros()
             )
         #else
             throw XCTSkip("macros are only supported when running tests for the host platform")
@@ -237,7 +239,7 @@ final class InlineToolMacroTests: XCTestCase {
                     return _InlineTool_compute()
                 }()
                 """,
-                macros: inlineToolMacros
+                macros: inlineToolMacros()
             )
         #else
             throw XCTSkip("macros are only supported when running tests for the host platform")
@@ -262,7 +264,7 @@ final class InlineToolMacroTests: XCTestCase {
                 diagnostics: [
                     DiagnosticSpec(message: "#Tool requires a name string as the first argument", line: 1, column: 1),
                 ],
-                macros: inlineToolMacros
+                macros: inlineToolMacros()
             )
         #else
             throw XCTSkip("macros are only supported when running tests for the host platform")
@@ -285,7 +287,7 @@ final class InlineToolMacroTests: XCTestCase {
                 diagnostics: [
                     DiagnosticSpec(message: "#Tool requires a description string as the second argument", line: 1, column: 1),
                 ],
-                macros: inlineToolMacros
+                macros: inlineToolMacros()
             )
         #else
             throw XCTSkip("macros are only supported when running tests for the host platform")

@@ -20,7 +20,7 @@ struct AgentConduitProviderSelectionStreamingTests {
         // NOTE: Keep this as a class, not an actor. `ToolCallStreamingInferenceProvider.streamWithToolCalls`
         // is synchronous and calling it through an existential can bypass actor isolation hops, triggering
         // "Incorrect actor executor assumption" crashes at runtime.
-        final class ScriptedStreamingProvider: @preconcurrency ToolCallStreamingInferenceProvider, @unchecked Sendable {
+        final class ScriptedStreamingProvider: ToolCallStreamingInferenceProvider, @unchecked Sendable {
             func generate(prompt _: String, options _: InferenceOptions) async throws -> String {
                 throw AgentError.generationFailed(reason: "Unexpected call to generate() in provider-selection streaming test")
             }

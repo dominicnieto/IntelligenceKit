@@ -28,8 +28,8 @@ public actor WaxMemory: Memory, MemoryPromptDescriptor, MemorySessionLifecycle {
         }
     }
 
-    public var count: Int { messages.count }
-    public var isEmpty: Bool { messages.isEmpty }
+    public var count: Int { persistedMessages.count }
+    public var isEmpty: Bool { persistedMessages.isEmpty }
 
     public nonisolated let memoryPromptTitle: String
     public nonisolated let memoryPromptGuidance: String?
@@ -48,6 +48,12 @@ public actor WaxMemory: Memory, MemoryPromptDescriptor, MemorySessionLifecycle {
         self.url = url
         self.embedder = embedder
         self.configuration = configuration
+        let loadedMessages: [MemoryMessage]
+        do {
+            let frameStore = try await Self.makeFrameStore(at: url)
+            loadedMessages = await Self.loadPersistedMessages(from: frameStore)
+            await frameStore.close()
+        }
 
         var waxConfig = Wax.Memory.Config.default
         waxConfig.enableVectorSearch = embedder != nil && configuration.enableVectorSearch
@@ -58,11 +64,17 @@ public actor WaxMemory: Memory, MemoryPromptDescriptor, MemorySessionLifecycle {
             self.store = try await Wax.Memory(at: url, config: waxConfig)
         }
 
+        self.persistedMessages = loadedMessages
+        self.persistedMessageIDs = Set(loadedMessages.map(\.id))
         self.memoryPromptTitle = configuration.promptTitle
         self.memoryPromptGuidance = configuration.promptGuidance
     }
 
     public func add(_ message: MemoryMessage) async {
+        guard persistedMessageIDs.contains(message.id) == false else {
+            return
+        }
+
         var metadata = message.metadata
         metadata["role"] = message.role.rawValue
         metadata["timestamp"] = isoFormatter.string(from: message.timestamp)
@@ -70,7 +82,9 @@ public actor WaxMemory: Memory, MemoryPromptDescriptor, MemorySessionLifecycle {
 
         do {
             try await store.save(message.content, metadata: metadata)
-            messages.append(message)
+            try await store.flush()
+            persistedMessages.append(message)
+            persistedMessageIDs.insert(message.id)
         } catch {
             Log.memory.error("WaxMemory: Failed to ingest message: \(error.localizedDescription)")
         }
@@ -87,7 +101,7 @@ public actor WaxMemory: Memory, MemoryPromptDescriptor, MemorySessionLifecycle {
     }
 
     public func allMessages() async -> [MemoryMessage] {
-        messages
+        persistedMessages
     }
 
     public func clear() async {
@@ -102,7 +116,8 @@ public actor WaxMemory: Memory, MemoryPromptDescriptor, MemorySessionLifecycle {
             } else {
                 store = try await Wax.Memory(at: url, config: waxConfig)
             }
-            messages.removeAll()
+            persistedMessages.removeAll()
+            persistedMessageIDs.removeAll()
         } catch {
             Log.memory.error("WaxMemory: Failed to clear persisted state: \(error.localizedDescription)")
         }
@@ -124,13 +139,74 @@ public actor WaxMemory: Memory, MemoryPromptDescriptor, MemorySessionLifecycle {
     private let configuration: Configuration
     private let url: URL
     private let embedder: (any WaxVectorSearch.EmbeddingProvider)?
-    private var messages: [MemoryMessage] = []
+    private var persistedMessages: [MemoryMessage] = []
+    private var persistedMessageIDs: Set<UUID> = []
     private let isoFormatter = ISO8601DateFormatter()
 
     private func removePersistedStoreIfPresent() throws {
         let fileManager = FileManager.default
         guard fileManager.fileExists(atPath: url.path) else { return }
         try fileManager.removeItem(at: url)
+    }
+
+    private static func makeFrameStore(at url: URL) async throws -> FrameStore {
+        if FileManager.default.fileExists(atPath: url.path) {
+            return try await FrameStore.open(at: url)
+        }
+
+        return try await FrameStore.create(at: url)
+    }
+
+    private static func loadPersistedMessages(from frameStore: FrameStore) async -> [MemoryMessage] {
+        let frames = await frameStore.frames()
+        let timestampFormatter = ISO8601DateFormatter()
+        var messages: [MemoryMessage] = []
+        messages.reserveCapacity(frames.count)
+
+        for frame in frames where frame.status == .active {
+            guard let messageIDString = frame.metadata["message_id"],
+                  let messageID = UUID(uuidString: messageIDString) else {
+                continue
+            }
+            guard let roleRaw = frame.metadata["role"],
+                  let role = MemoryMessage.Role(rawValue: roleRaw) else {
+                continue
+            }
+            guard let contentData = try? await frameStore.content(frameID: frame.id),
+                  let content = String(data: contentData, encoding: .utf8) else {
+                continue
+            }
+
+            var metadata = frame.metadata
+            metadata.removeValue(forKey: "message_id")
+            metadata.removeValue(forKey: "role")
+            metadata.removeValue(forKey: "timestamp")
+
+            let timestamp = frame.metadata["timestamp"]
+                .flatMap { timestampFormatter.date(from: $0) } ?? Date(timeIntervalSince1970: 0)
+
+            messages.append(
+                MemoryMessage(
+                    id: messageID,
+                    role: role,
+                    content: content,
+                    timestamp: timestamp,
+                    metadata: metadata
+                )
+            )
+        }
+
+        let uniqueMessages = messages.reduce(into: [UUID: MemoryMessage]()) { partialResult, message in
+            partialResult[message.id] = message
+        }
+
+        return uniqueMessages.values.sorted {
+            if $0.timestamp != $1.timestamp {
+                return $0.timestamp < $1.timestamp
+            }
+
+            return $0.id.uuidString < $1.id.uuidString
+        }
     }
 
     private func formatRAGContext(_ rag: RAGContext, tokenLimit: Int) -> String {
@@ -166,5 +242,59 @@ public actor WaxMemory: Memory, MemoryPromptDescriptor, MemorySessionLifecycle {
         }
 
         return lines.joined(separator: "\n")
+    }
+}
+
+public extension WaxMemory {
+    /// Default persistent store location used when Swarm creates a durable Wax-backed memory automatically.
+    static var defaultStoreURL: URL {
+        makeDefaultStoreURL()
+    }
+
+    static func makeDefaultStoreURL() -> URL {
+        let fileManager = FileManager.default
+        let isRunningTests = isRunningUnderTests()
+        let baseURL = isRunningTests
+            ? fileManager.temporaryDirectory
+            : (fileManager.urls(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask
+            ).first ?? fileManager.temporaryDirectory)
+
+        let root = baseURL
+            .appendingPathComponent("Swarm", isDirectory: true)
+            .appendingPathComponent(
+                isRunningTests ? "AgentMemoryTests" : "AgentMemory",
+                isDirectory: true
+            )
+
+        try? fileManager.createDirectory(at: root, withIntermediateDirectories: true)
+        let fileName = isRunningTests ? "wax-memory-\(UUID().uuidString).mv2s" : "wax-memory.mv2s"
+        return root.appendingPathComponent(fileName)
+    }
+
+    private static func isRunningUnderTests() -> Bool {
+        let processInfo = ProcessInfo.processInfo
+        let environment = processInfo.environment
+        if environment["XCTestConfigurationFilePath"] != nil ||
+            environment["XCTestSessionIdentifier"] != nil
+        {
+            return true
+        }
+
+        let arguments = processInfo.arguments.joined(separator: " ").lowercased()
+        if arguments.contains("xctest") ||
+            arguments.contains("swiftpm-testing-helper") ||
+            arguments.contains("swift-testing")
+        {
+            return true
+        }
+
+        let bundlePath = Bundle.main.bundlePath.lowercased()
+        if bundlePath.hasSuffix(".xctest") || bundlePath.contains("swiftpm-testing-helper") {
+            return true
+        }
+
+        return NSClassFromString("XCTestCase") != nil
     }
 }

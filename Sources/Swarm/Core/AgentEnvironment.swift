@@ -16,6 +16,7 @@ public struct AgentEnvironment: Sendable {
     public var inferenceProvider: (any InferenceProvider)?
     public var tracer: (any Tracer)?
     public var memory: (any Memory)?
+    public var promptTokenCounter: any PromptTokenCounter
     public var membrane: MembraneEnvironment?
     public var webSearch: WebSearchTool.Configuration?
 
@@ -23,12 +24,14 @@ public struct AgentEnvironment: Sendable {
         inferenceProvider: (any InferenceProvider)? = nil,
         tracer: (any Tracer)? = nil,
         memory: (any Memory)? = nil,
-        membrane: MembraneEnvironment? = nil,
+        promptTokenCounter: any PromptTokenCounter = EstimatedPromptTokenCounter.shared,
+        membrane: MembraneEnvironment? = .enabled,
         webSearch: WebSearchTool.Configuration? = nil
     ) {
         self.inferenceProvider = inferenceProvider
         self.tracer = tracer
         self.memory = memory
+        self.promptTokenCounter = promptTokenCounter
         self.membrane = membrane
         self.webSearch = webSearch
     }

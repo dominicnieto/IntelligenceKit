@@ -39,7 +39,7 @@ struct ReActAgentTests {
 
     @Test("Native tool calling executes provider tool calls")
     func nativeToolCallingExecutesToolCalls() async throws {
-        let spyTool = await SpyTool(
+        let spyTool = SpyTool(
             name: "test_tool",
             result: .string("Tool result")
         )
@@ -133,7 +133,7 @@ struct BuiltInToolsTests {
     #if canImport(Darwin)
         @Test("Calculator tool")
         func calculatorTool() async throws {
-            var calculator = CalculatorTool()
+            let calculator = CalculatorTool()
 
             // Test basic arithmetic with operator precedence
             let result = try await calculator.execute(arguments: [
@@ -147,7 +147,7 @@ struct BuiltInToolsTests {
 
     @Test("DateTime tool")
     func dateTimeTool() async throws {
-        var dateTime = DateTimeTool()
+        let dateTime = DateTimeTool()
 
         // Test unix timestamp format
         let result = try await dateTime.execute(arguments: [
@@ -167,7 +167,7 @@ struct BuiltInToolsTests {
 
     @Test("String tool")
     func stringTool() async throws {
-        var stringTool = StringTool()
+        let stringTool = StringTool()
 
         // Test uppercase operation
         let result = try await stringTool.execute(arguments: [

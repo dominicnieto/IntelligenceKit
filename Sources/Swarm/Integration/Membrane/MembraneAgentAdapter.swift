@@ -1,9 +1,6 @@
 import Foundation
-
-#if SWARM_MEMBRANE
 import Membrane
 import MembraneHive
-#endif
 
 public struct MembraneFeatureConfiguration: Sendable, Equatable {
     public static let `default` = MembraneFeatureConfiguration()
@@ -109,7 +106,6 @@ public actor DefaultMembraneAgentAdapter: MembraneAgentAdapter {
     public init(configuration: MembraneFeatureConfiguration = .default) {
         self.configuration = configuration
 
-        #if SWARM_MEMBRANE
         jitLoader = JITToolLoader(jitMinToolCount: configuration.jitMinToolCount)
         let store = InMemoryPointerStore()
         pointerStore = store
@@ -121,7 +117,6 @@ public actor DefaultMembraneAgentAdapter: MembraneAgentAdapter {
             )
         )
         toolPlan = .allowAll
-        #endif
 
         // TODO: Restore when MembraneHive ships MembraneCheckpointAdapter
         // #if canImport(MembraneHive)
@@ -138,7 +133,6 @@ public actor DefaultMembraneAgentAdapter: MembraneAgentAdapter {
         var selectedSchemas = sortedSchemas
         var mode = "allowAll"
 
-        #if SWARM_MEMBRANE
         let manifests = sortedSchemas.map { ToolManifest(name: $0.name, description: $0.description) }
         var nextPlan = jitLoader.plan(tools: manifests, existingPlan: toolPlan)
 
@@ -171,9 +165,8 @@ public actor DefaultMembraneAgentAdapter: MembraneAgentAdapter {
         }
 
         toolPlan = nextPlan
-        #endif
 
-        let distilledPrompt = distillPromptIfNeeded(
+        let distilledPrompt = await distillPromptIfNeeded(
             prompt: prompt,
             profile: profile,
             toolCount: toolSchemas.count
@@ -193,7 +186,6 @@ public actor DefaultMembraneAgentAdapter: MembraneAgentAdapter {
     ) async throws -> MembraneToolResultBoundary {
         usageCounts[toolName, default: 0] += 1
 
-        #if SWARM_MEMBRANE
         let decision = try await pointerResolver.pointerizeIfNeeded(toolName: toolName, output: output)
         switch decision {
         case let .inline(text):
@@ -209,10 +201,6 @@ public actor DefaultMembraneAgentAdapter: MembraneAgentAdapter {
                 pointerID: pointer.id
             )
         }
-        #else
-        try await syncCheckpointState()
-        return MembraneToolResultBoundary(textForConversation: output)
-        #endif
     }
 
     public func handleInternalToolCall(
@@ -271,15 +259,11 @@ public actor DefaultMembraneAgentAdapter: MembraneAgentAdapter {
                 )
             }
 
-            #if SWARM_MEMBRANE
             let payload = try await pointerStore.resolve(pointerID: pointerID)
             if let text = String(data: payload, encoding: .utf8) {
                 return text
             }
             return payload.base64EncodedString()
-            #else
-            return "Pointer resolution unavailable in this build."
-            #endif
 
         default:
             throw MembraneAgentAdapterError.unsupportedInternalTool(name: name)
@@ -318,12 +302,10 @@ public actor DefaultMembraneAgentAdapter: MembraneAgentAdapter {
     private var pointerIDs: [String] = []
     private var usageCounts: [String: Int] = [:]
 
-    #if SWARM_MEMBRANE
     private let jitLoader: JITToolLoader
     private let pointerStore: InMemoryPointerStore
     private let pointerResolver: PointerResolver
     private var toolPlan: ToolPlan
-    #endif
 
     // TODO: Restore when MembraneHive ships MembraneCheckpointAdapter
     // #if canImport(MembraneHive)
@@ -349,54 +331,46 @@ public actor DefaultMembraneAgentAdapter: MembraneAgentAdapter {
         prompt: String,
         profile: ContextProfile,
         toolCount: Int
-    ) -> String {
+    ) async -> String {
         guard profile.preset == .strict4k, toolCount >= configuration.jitMinToolCount else {
             return prompt
         }
 
-        let charsPerToken = CharacterBasedTokenEstimator.shared.charactersPerToken
-        let maxChars = max(1, profile.budget.maxInputTokens * charsPerToken)
-        guard prompt.count > maxChars else {
+        let counter = PromptTokenBudgeting.counter()
+        let maxTokens = profile.budget.maxInputTokens
+        guard await PromptTokenBudgeting.countTokens(in: prompt, using: counter) > maxTokens else {
             return prompt
         }
 
         let marker = "\n\n[Membrane distilled context]\n\n"
-        if maxChars <= marker.count + 16 {
-            return String(marker.prefix(maxChars))
+        let markerTokens = await PromptTokenBudgeting.countTokens(in: marker, using: counter)
+        if maxTokens <= markerTokens + 16 {
+            return await PromptTokenBudgeting.prefix(prompt, maxTokens: maxTokens, using: counter)
         }
 
-        let tailChars = max(16, maxChars / 3)
-        let headChars = max(16, maxChars - marker.count - tailChars)
-        let head = prefix(prompt, maxCharacters: headChars)
-        let tail = suffix(prompt, maxCharacters: tailChars)
+        let tailTokens = max(16, maxTokens / 3)
+        let headTokens = max(16, maxTokens - markerTokens - tailTokens)
+        let head = await PromptTokenBudgeting.prefix(prompt, maxTokens: headTokens, using: counter)
+        let tail = await PromptTokenBudgeting.suffix(prompt, maxTokens: tailTokens, using: counter)
 
         var compacted = head + marker + tail
-        if compacted.count > maxChars {
-            let overflow = compacted.count - maxChars
-            let adjustedTail = max(0, tailChars - overflow)
-            compacted = head + marker + suffix(prompt, maxCharacters: adjustedTail)
+        if await PromptTokenBudgeting.countTokens(in: compacted, using: counter) > maxTokens {
+            let overflow = await PromptTokenBudgeting.countTokens(in: compacted, using: counter) - maxTokens
+            let adjustedTail = max(0, tailTokens - overflow)
+            let adjustedSuffix = await PromptTokenBudgeting.suffix(
+                prompt,
+                maxTokens: adjustedTail,
+                using: counter
+            )
+            compacted = head + marker + adjustedSuffix
         }
 
-        if compacted.count <= maxChars {
+        if await PromptTokenBudgeting.countTokens(in: compacted, using: counter) <= maxTokens {
             return compacted
         }
 
-        let adjustedHead = max(0, maxChars - marker.count)
-        return prefix(prompt, maxCharacters: adjustedHead) + marker
-    }
-
-    private func prefix(_ text: String, maxCharacters: Int) -> String {
-        guard maxCharacters > 0 else { return "" }
-        guard text.count > maxCharacters else { return text }
-        let end = text.index(text.startIndex, offsetBy: maxCharacters)
-        return String(text[..<end])
-    }
-
-    private func suffix(_ text: String, maxCharacters: Int) -> String {
-        guard maxCharacters > 0 else { return "" }
-        guard text.count > maxCharacters else { return text }
-        let start = text.index(text.endIndex, offsetBy: -maxCharacters)
-        return String(text[start...])
+        let adjustedHead = max(0, maxTokens - markerTokens)
+        return await PromptTokenBudgeting.prefix(prompt, maxTokens: adjustedHead, using: counter) + marker
     }
 
     private func syncCheckpointState(totalTokens _: Int = 4_096) async throws {

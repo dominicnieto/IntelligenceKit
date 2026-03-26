@@ -23,7 +23,8 @@ import Foundation
 public actor MockInferenceProvider: InferenceProvider,
     CapabilityReportingInferenceProvider,
     ConversationInferenceProvider,
-    StreamingConversationInferenceProvider
+    StreamingConversationInferenceProvider,
+    PromptTokenCountingInferenceProvider
 {
     // MARK: Public
 
@@ -63,6 +64,9 @@ public actor MockInferenceProvider: InferenceProvider,
 
     /// Recorded structured-message streams for verification.
     public private(set) var streamMessageCalls: [(messages: [InferenceMessage], options: InferenceOptions)] = []
+
+    /// Recorded token counting calls for verification.
+    public private(set) var tokenCountCalls: [String] = []
 
     /// Recorded prompt-based tool call generations for verification.
     public private(set) var toolCallCalls: [(prompt: String, tools: [ToolSchema], options: InferenceOptions)] = []
@@ -202,6 +206,11 @@ public actor MockInferenceProvider: InferenceProvider,
         return try await nextToolCallResponse()
     }
 
+    public func countTokens(in text: String) async throws -> Int {
+        tokenCountCalls.append(text)
+        return max(1, text.count)
+    }
+
     // MARK: - Test Helpers
 
     /// Resets all recorded calls and response index.
@@ -214,6 +223,7 @@ public actor MockInferenceProvider: InferenceProvider,
         streamMessageCalls = []
         toolCallCalls = []
         toolCallMessageCalls = []
+        tokenCountCalls = []
         toolCallResponses = []
         errorToThrow = nil
     }

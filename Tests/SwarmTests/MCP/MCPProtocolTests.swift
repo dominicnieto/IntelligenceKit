@@ -69,7 +69,7 @@ struct MCPRequestTests {
 
     @Test("request with empty method throws")
     func requestEmptyMethodThrows() async {
-        await #expect(throws: MCPError.self) {
+        #expect(throws: MCPError.self) {
             _ = try MCPRequest(method: "")
         }
     }
@@ -87,7 +87,7 @@ struct MCPResponseTests {
         // This test verifies the Swift API works correctly with properly encoded values.
 
         // Create response using factory method (proper internal API)
-        let response = try MCPResponse.success(id: "resp-1", result: .dictionary(["tools": .array([])]))
+        let response = MCPResponse.success(id: "resp-1", result: .dictionary(["tools": .array([])]))
 
         #expect(response.jsonrpc == "2.0")
         #expect(response.id == "resp-1")
@@ -129,7 +129,7 @@ struct MCPResponseTests {
 
     @Test("success factory creates valid response")
     func successFactory() throws {
-        let response = try MCPResponse.success(id: "success-1", result: .string("done"))
+        let response = MCPResponse.success(id: "success-1", result: .string("done"))
 
         #expect(response.jsonrpc == "2.0")
         #expect(response.id == "success-1")
@@ -140,7 +140,7 @@ struct MCPResponseTests {
     @Test("failure factory creates valid error response")
     func failureFactory() throws {
         let errorObj = MCPErrorObject(code: -32600, message: "Invalid request")
-        let response = try MCPResponse.failure(id: "fail-1", error: errorObj)
+        let response = MCPResponse.failure(id: "fail-1", error: errorObj)
 
         #expect(response.jsonrpc == "2.0")
         #expect(response.id == "fail-1")
@@ -328,7 +328,7 @@ struct MCPResourceTests {
 
     @Test("resource content throws when both text and blob are provided")
     func resourceContentBothSetThrows() async {
-        await #expect(throws: MCPError.self) {
+        #expect(throws: MCPError.self) {
             _ = try MCPResourceContent(
                 uri: "file:///broken",
                 mimeType: "text/plain",
@@ -340,7 +340,7 @@ struct MCPResourceTests {
 
     @Test("resource content throws when neither text nor blob are provided")
     func resourceContentNeitherSetThrows() async {
-        await #expect(throws: MCPError.self) {
+        #expect(throws: MCPError.self) {
             _ = try MCPResourceContent(uri: "file:///broken")
         }
     }

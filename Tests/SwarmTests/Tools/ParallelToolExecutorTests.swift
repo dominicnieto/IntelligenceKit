@@ -310,7 +310,7 @@ struct ParallelToolExecutorTests {
     @Test("Tool validation fails fast before any execution")
     func toolValidationFailsFast() async throws {
         // Use a spy tool to verify it was NOT called
-        let spyTool = await SpyTool(name: "spy_tool", result: .string("should not execute"))
+        let spyTool = SpyTool(name: "spy_tool", result: .string("should not execute"))
         let registry = try await createRegistry(tools: [spyTool])
         let executor = ParallelToolExecutor()
         let agent = createMockAgent()
@@ -422,7 +422,7 @@ struct ParallelToolExecutorTests {
 
     @Test("Arguments are passed correctly to tools")
     func argumentsPassing() async throws {
-        let spyTool = await SpyTool(name: "spy", result: .string("received"))
+        let spyTool = SpyTool(name: "spy", result: .string("received"))
         let registry = try await createRegistry(tools: [spyTool])
         let executor = ParallelToolExecutor()
         let agent = createMockAgent()

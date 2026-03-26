@@ -1,8 +1,4 @@
-#if canImport(ConduitAdvanced)
 import ConduitAdvanced
-#else
-import Conduit
-#endif
 import Foundation
 
 /// Opinionated, beginner-friendly inference presets backed by Conduit.
@@ -220,11 +216,7 @@ public struct LLM: Sendable, InferenceProvider {
                 )
             #endif
         case let .ollama(config):
-            let provider = OpenAIProvider(
-                ollamaHost: config.settings.host,
-                port: config.settings.port,
-                ollamaConfig: config.settings.toConduit()
-            )
+            let provider = ollamaProvider(settings: config.settings)
             let modelID = Self.openAIModelID(config.model)
             return ConduitInferenceProvider(provider: provider, model: modelID)
         }
@@ -239,6 +231,14 @@ public struct LLM: Sendable, InferenceProvider {
         }
 
         return OpenAIProvider(openRouterKey: apiKey, routing: routing.toConduit())
+    }
+
+    private func ollamaProvider(settings: OllamaSettings) -> OpenAIProvider {
+        OpenAIProvider(
+            ollamaHost: settings.host,
+            port: settings.port,
+            ollamaConfig: settings.toConduit()
+        )
     }
 }
 

@@ -99,7 +99,7 @@ public struct Agent: AgentRuntime, Sendable {
     /// See ``AgentConfiguration`` for all available configuration options.
     public private(set) var configuration: AgentConfiguration
 
-    /// The optional memory system for conversation history and context retrieval.
+    /// The explicitly configured memory system for conversation history and context retrieval.
     ///
     /// When configured, the agent uses memory to:
     /// - Retrieve relevant context from previous conversations (RAG)
@@ -110,7 +110,9 @@ public struct Agent: AgentRuntime, Sendable {
     /// - **Memory**: Provides additional context (RAG, summaries) - not for conversation storage
     /// - **Session**: Stores the actual conversation history and is the source of truth for transcripts
     ///
-    /// If no memory is set, the agent operates statelessly (except for session history).
+    /// If no explicit memory is set, Swarm still uses a composite default memory
+    /// internally: ContextCore for working context and Wax for durable recall.
+    /// This property only reflects an explicit override.
     ///
     /// ## Setting Memory
     /// Use ``init(_:configuration:memory:inferenceProvider:tracer:inputGuardrails:outputGuardrails:guardrailRunnerConfiguration:handoffs:tools:)``
@@ -118,6 +120,7 @@ public struct Agent: AgentRuntime, Sendable {
     ///
     /// See ``Memory`` for available memory implementations.
     public private(set) var memory: (any Memory)?
+    private let defaultMemory: (any Memory)?
 
     /// The optional custom inference provider for LLM requests.
     ///
@@ -226,7 +229,7 @@ public struct Agent: AgentRuntime, Sendable {
     ///   - tools: Tools available to the agent. Default: []
     ///   - instructions: System instructions defining agent behavior. Default: ""
     ///   - configuration: Agent configuration settings. Default: .default
-    ///   - memory: Optional memory system. Default: nil
+    ///   - memory: Optional explicit memory override. Default: composite ContextCore + Wax memory
     ///   - inferenceProvider: Optional custom inference provider. Default: nil
     ///   - tracer: Optional tracer for observability. Default: nil
     ///   - inputGuardrails: Input validation guardrails. Default: []
@@ -250,6 +253,7 @@ public struct Agent: AgentRuntime, Sendable {
         self.instructions = instructions
         self.configuration = configuration
         self.memory = memory
+        self.defaultMemory = try memory == nil ? Self.makeDefaultMemory() : nil
         self.inferenceProvider = inferenceProvider
         self.tracer = tracer
         self.inputGuardrails = inputGuardrails
@@ -296,7 +300,7 @@ public struct Agent: AgentRuntime, Sendable {
     ///   - tools: Typed tools available to the agent. Default: []
     ///   - instructions: System instructions defining agent behavior. Default: ""
     ///   - configuration: Agent configuration settings. Default: .default
-    ///   - memory: Optional memory system. Default: nil
+    ///   - memory: Optional explicit memory override. Default: composite ContextCore + Wax memory
     ///   - inferenceProvider: Optional custom inference provider. Default: nil
     ///   - tracer: Optional tracer for observability. Default: nil
     ///   - inputGuardrails: Input validation guardrails. Default: []
@@ -349,7 +353,7 @@ public struct Agent: AgentRuntime, Sendable {
     ///   - tools: Tools available to the agent. Default: []
     ///   - instructions: System instructions defining agent behavior. Default: ""
     ///   - configuration: Agent configuration settings. Default: .default
-    ///   - memory: Optional memory system. Default: nil
+    ///   - memory: Optional explicit memory override. Default: composite ContextCore + Wax memory
     ///   - inferenceProvider: Optional custom inference provider. Default: nil
     ///   - tracer: Optional tracer for observability. Default: nil
     ///   - inputGuardrails: Input validation guardrails. Default: []
@@ -405,7 +409,7 @@ public struct Agent: AgentRuntime, Sendable {
     /// - Parameters:
     ///   - instructions: System instructions defining agent behavior.
     ///   - configuration: Agent configuration settings. Default: `.default`
-    ///   - memory: Optional memory system. Default: `nil`
+    ///   - memory: Optional explicit memory override. Default: composite ContextCore + Wax memory
     ///   - inferenceProvider: Optional custom inference provider. Default: `nil`
     ///   - tracer: Optional tracer for observability. Default: `nil`
     ///   - inputGuardrails: Input validation guardrails. Default: `[]`
@@ -608,6 +612,7 @@ public struct Agent: AgentRuntime, Sendable {
     private var toolRegistry: ToolRegistry
     private let cancellationState = ActiveRunCancellationState()
     private static let autoResponseTracker = ResponseTracker()
+    private static let defaultMemorySessionTracker = DefaultMemorySessionTracker()
     private static let responseIDMetadataKey = "response.id"
     private static let transcriptSchemaVersionMetadataKey = "swarm.transcript.schema_version"
     private static let transcriptHashMetadataKey = "swarm.transcript.hash"
@@ -651,6 +656,92 @@ public struct Agent: AgentRuntime, Sendable {
         }
     }
 
+    private final class TimedOperationCoordinator<T: Sendable>: @unchecked Sendable {
+        private let lock = NSLock()
+        private var continuation: CheckedContinuation<T, Error>?
+        private var operationTask: Task<Void, Never>?
+        private var timeoutTask: Task<Void, Never>?
+        private var completed = false
+
+        func install(continuation: CheckedContinuation<T, Error>) {
+            lock.lock()
+            self.continuation = continuation
+            lock.unlock()
+        }
+
+        func setOperationTask(_ task: Task<Void, Never>) {
+            lock.lock()
+            operationTask = task
+            lock.unlock()
+        }
+
+        func setTimeoutTask(_ task: Task<Void, Never>) {
+            lock.lock()
+            timeoutTask = task
+            lock.unlock()
+        }
+
+        func finish(returning value: T) {
+            complete { continuation in
+                continuation.resume(returning: value)
+            }
+        }
+
+        func finish(throwing error: Error) {
+            complete { continuation in
+                continuation.resume(throwing: error)
+            }
+        }
+
+        func cancelPending(with error: Error) {
+            let pendingState = takePendingState()
+            pendingState.operationTask?.cancel()
+            pendingState.timeoutTask?.cancel()
+            pendingState.continuation?.resume(throwing: error)
+        }
+
+        private func complete(_ resume: (CheckedContinuation<T, Error>) -> Void) {
+            let pendingState = takePendingState()
+            pendingState.operationTask?.cancel()
+            pendingState.timeoutTask?.cancel()
+            guard let continuation = pendingState.continuation else { return }
+            resume(continuation)
+        }
+
+        private func takePendingState() -> (
+            continuation: CheckedContinuation<T, Error>?,
+            operationTask: Task<Void, Never>?,
+            timeoutTask: Task<Void, Never>?
+        ) {
+            lock.lock()
+            defer { lock.unlock() }
+
+            guard completed == false else {
+                return (nil, nil, nil)
+            }
+
+            completed = true
+            let pendingContinuation = continuation
+            let pendingOperationTask = operationTask
+            let pendingTimeoutTask = timeoutTask
+            continuation = nil
+            operationTask = nil
+            timeoutTask = nil
+            return (pendingContinuation, pendingOperationTask, pendingTimeoutTask)
+        }
+    }
+
+    private actor DefaultMemorySessionTracker {
+        private var sessionIDs: [ObjectIdentifier: String] = [:]
+
+        func didSwitchSession(for memory: AnyObject, sessionID: String) -> Bool {
+            let key = ObjectIdentifier(memory)
+            let previous = sessionIDs[key]
+            sessionIDs[key] = sessionID
+            return previous != sessionID
+        }
+    }
+
     private func runInternal(
         _ input: String,
         session: (any Session)? = nil,
@@ -664,8 +755,21 @@ public struct Agent: AgentRuntime, Sendable {
         let activeTracer = tracer
             ?? AgentEnvironmentValues.current.tracer
             ?? (configuration.defaultTracingEnabled ? SwiftLogTracer(minimumLevel: .debug) : nil)
-        let activeMemory = memory ?? AgentEnvironmentValues.current.memory
+        let activeMemory = resolvedMemory()
         let lifecycleMemory = activeMemory as? any MemorySessionLifecycle
+
+        if let session,
+           let activeMemory,
+           let defaultMemory
+        {
+            let activeMemoryObject = activeMemory as AnyObject
+            let defaultMemoryObject = defaultMemory as AnyObject
+            if activeMemoryObject === defaultMemoryObject,
+               await Self.defaultMemorySessionTracker.didSwitchSession(for: activeMemoryObject, sessionID: session.sessionId)
+            {
+                await activeMemory.clear()
+            }
+        }
 
         let tracing = TracingHelper(
             tracer: activeTracer,
@@ -711,8 +815,12 @@ public struct Agent: AgentRuntime, Sendable {
             let importPolicy = activeMemory as? any MemorySessionImportPolicy
             let allowsSessionSeeding = importPolicy?.allowsAutomaticSessionSeeding ?? true
             if let activeMemory, allowsSessionSeeding, !sessionHistory.isEmpty, await activeMemory.isEmpty {
-                for message in sessionHistory {
-                    await activeMemory.add(message)
+                if let replayAware = activeMemory as? any MemorySessionReplayAware {
+                    await replayAware.importSessionHistory(sessionHistory)
+                } else {
+                    for message in sessionHistory {
+                        await activeMemory.add(message)
+                    }
                 }
             }
 
@@ -720,16 +828,21 @@ public struct Agent: AgentRuntime, Sendable {
             let userMessage = SwarmTranscriptCodec.encodeMessage(role: .user, content: input)
 
             // Execute the tool calling loop with session context
-            let toolLoopOutcome = try await executeToolCallingLoop(
-                input: input,
-                toolRegistry: runtimeToolRegistry,
-                sessionHistory: sessionHistory,
-                session: session,
-                resultBuilder: resultBuilder,
-                observer: observer,
-                tracing: tracing,
-                structuredOutputRequest: structuredOutputRequest
-            )
+            let provider = try await resolvedInferenceProvider(toolRegistry: runtimeToolRegistry)
+            let runtimeEnvironment = runtimeEnvironment(for: provider)
+            let toolLoopOutcome = try await AgentEnvironmentValues.$current.withValue(runtimeEnvironment) {
+                try await executeToolCallingLoop(
+                    input: input,
+                    toolRegistry: runtimeToolRegistry,
+                    provider: provider,
+                    sessionHistory: sessionHistory,
+                    session: session,
+                    resultBuilder: resultBuilder,
+                    observer: observer,
+                    tracing: tracing,
+                    structuredOutputRequest: structuredOutputRequest
+                )
+            }
 
             _ = resultBuilder.setOutput(toolLoopOutcome.output)
             applyStructuredOutputMetadata(toolLoopOutcome.structuredOutput, to: resultBuilder)
@@ -831,13 +944,30 @@ public struct Agent: AgentRuntime, Sendable {
     }
 
     private func resolvedMembraneAdapter() -> (any MembraneAgentAdapter)? {
-        guard let membrane = AgentEnvironmentValues.current.membrane, membrane.isEnabled else {
+        let membrane = AgentEnvironmentValues.current.membrane ?? .enabled
+        guard membrane.isEnabled else {
             return nil
         }
         if let adapter = membrane.adapter {
             return adapter
         }
         return DefaultMembraneAgentAdapter(configuration: membrane.configuration)
+    }
+
+    private func runtimeEnvironment(for provider: any InferenceProvider) -> AgentEnvironment {
+        var environment = AgentEnvironmentValues.current
+        if let tokenCounter = provider as? any PromptTokenCountingInferenceProvider {
+            environment.promptTokenCounter = tokenCounter
+        }
+        return environment
+    }
+
+    private func resolvedMemory() -> (any Memory)? {
+        memory ?? AgentEnvironmentValues.current.memory ?? defaultMemory
+    }
+
+    private static func makeDefaultMemory() throws -> any Memory {
+        try DefaultAgentMemory()
     }
 
     private func resolvedToolRegistry() async throws -> ToolRegistry {
@@ -973,6 +1103,7 @@ public struct Agent: AgentRuntime, Sendable {
     private func executeToolCallingLoop(
         input: String,
         toolRegistry: ToolRegistry,
+        provider: any InferenceProvider,
         sessionHistory: [MemoryMessage] = [],
         session: (any Session)?,
         resultBuilder: AgentResult.Builder,
@@ -982,14 +1113,13 @@ public struct Agent: AgentRuntime, Sendable {
     ) async throws -> ToolLoopOutcome {
         var iteration = 0
         let startTime = ContinuousClock.now
-        let provider = try await resolvedInferenceProvider(toolRegistry: toolRegistry)
         var inferenceOptions = await resolvedInferenceOptions(session: session, provider: provider)
         if let structuredOutputRequest {
             inferenceOptions.structuredOutput = structuredOutputRequest
         }
 
         // Retrieve relevant context from memory (enables RAG for VectorMemory)
-        let activeMemory = memory ?? AgentEnvironmentValues.current.memory
+        let activeMemory = resolvedMemory()
         var memoryContext = ""
         if let mem = activeMemory {
             let contextProfile = configuration.effectiveContextProfile
@@ -1054,7 +1184,7 @@ public struct Agent: AgentRuntime, Sendable {
                     }
                 }
 
-                let prompt = PromptEnvelope.enforce(
+                let prompt = await PromptEnvelope.enforce(
                     prompt: plannedPrompt,
                     profile: configuration.effectiveContextProfile
                 )
@@ -1240,20 +1370,40 @@ public struct Agent: AgentRuntime, Sendable {
             throw AgentError.timeout(duration: configuration.timeout)
         }
 
-        return try await withThrowingTaskGroup(of: T.self) { group in
-            group.addTask(operation: operation)
-            group.addTask { [timeout = configuration.timeout, remaining] in
-                try await Task.sleep(for: remaining)
-                throw AgentError.timeout(duration: timeout)
-            }
+        let coordinator = TimedOperationCoordinator<T>()
 
-            defer { group.cancelAll() }
+        return try await withTaskCancellationHandler(
+            operation: {
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<T, Error>) in
+                    coordinator.install(continuation: continuation)
 
-            guard let next = try await group.next() else {
-                throw AgentError.timeout(duration: configuration.timeout)
+                    let operationTask = Task {
+                        do {
+                            coordinator.finish(returning: try await operation())
+                        } catch {
+                            coordinator.finish(throwing: error)
+                        }
+                    }
+                    coordinator.setOperationTask(operationTask)
+
+                    let timeoutTask = Task { [timeout = configuration.timeout, remaining] in
+                        do {
+                            try await Task.sleep(for: remaining)
+                            operationTask.cancel()
+                            coordinator.finish(throwing: AgentError.timeout(duration: timeout))
+                        } catch is CancellationError {
+                            return
+                        } catch {
+                            coordinator.finish(throwing: error)
+                        }
+                    }
+                    coordinator.setTimeoutTask(timeoutTask)
+                }
+            },
+            onCancel: {
+                coordinator.cancelPending(with: CancellationError())
             }
-            return next
-        }
+        )
     }
 
     private func normalizeCancellation(_ error: Error) -> Error {
@@ -1396,7 +1546,7 @@ public struct Agent: AgentRuntime, Sendable {
         membraneAdapter: (any MembraneAgentAdapter)?,
         startTime: ContinuousClock.Instant
     ) async throws {
-        let activeMemory = memory ?? AgentEnvironmentValues.current.memory
+        let activeMemory = resolvedMemory()
 
         if let membraneAdapter,
            MembraneInternalTools.isInternalTool(parsedCall.name) {
@@ -2174,7 +2324,7 @@ public extension Agent {
     ///   - instructions: System instructions defining agent behavior. Default: ""
     ///   - tools: Tools available to the agent. Default: []
     ///   - inferenceProvider: Optional custom inference provider. Default: nil
-    ///   - memory: Optional memory system. Default: nil
+    ///   - memory: Optional explicit memory override. Default: composite ContextCore + Wax memory
     ///   - tracer: Optional tracer for observability. Default: nil
     ///   - configuration: Additional agent configuration settings. Default: .default
     ///   - inputGuardrails: Input validation guardrails. Default: []
@@ -2236,7 +2386,7 @@ public extension Agent {
     ///   - instructions: System instructions. Default: ""
     ///   - tools: Tools available to the agent. Default: []
     ///   - inferenceProvider: Optional inference provider. Default: nil
-    ///   - memory: Optional memory system. Default: nil
+    ///   - memory: Optional explicit memory override. Default: composite ContextCore + Wax memory
     ///   - tracer: Optional tracer. Default: nil
     ///   - configuration: Additional configuration. Default: .default
     ///   - inputGuardrails: Input guardrails. Default: []
@@ -2316,7 +2466,7 @@ public extension Agent {
     ///     .withMemory(.conversation(maxMessages: 50))
     /// ```
     @discardableResult
-    public func withMemory(_ memory: some Memory) -> Agent {
+    func withMemory(_ memory: some Memory) -> Agent {
         var copy = self
         copy.memory = memory
         return copy
@@ -2324,7 +2474,7 @@ public extension Agent {
 
     /// Sets the tracer for observability.
     @discardableResult
-    public func withTracer(_ tracer: any Tracer) -> Agent {
+    func withTracer(_ tracer: any Tracer) -> Agent {
         var copy = self
         copy.tracer = tracer
         return copy
@@ -2332,7 +2482,7 @@ public extension Agent {
 
     /// Sets input and/or output guardrails.
     @discardableResult
-    public func withGuardrails(
+    func withGuardrails(
         input: [any InputGuardrail] = [],
         output: [any OutputGuardrail] = []
     ) -> Agent {
@@ -2344,7 +2494,7 @@ public extension Agent {
 
     /// Sets handoff agents for multi-agent orchestration.
     @discardableResult
-    public func withHandoffs(_ agents: [any AgentRuntime]) -> Agent {
+    func withHandoffs(_ agents: [any AgentRuntime]) -> Agent {
         var copy = self
         copy._handoffs = agents.map { agent in
             AnyHandoffConfiguration(
@@ -2358,7 +2508,7 @@ public extension Agent {
 
     /// Replaces the tool set with the given array of `any Tool`.
     @discardableResult
-    public func withTools(_ tools: [any Tool]) -> Agent {
+    func withTools(_ tools: [any Tool]) -> Agent {
         var copy = self
         let bridged = tools.map { bridgeToolToAnyJSON($0) }
         copy.tools = bridged
@@ -2368,7 +2518,7 @@ public extension Agent {
 
     /// Replaces the tool set using a `@ToolBuilder` closure.
     @discardableResult
-    public func withTools(@ToolBuilder _ builder: () -> ToolCollection) -> Agent {
+    func withTools(@ToolBuilder _ builder: () -> ToolCollection) -> Agent {
         var copy = self
         let storage = builder().storage
         copy.tools = storage
@@ -2378,7 +2528,7 @@ public extension Agent {
 
     /// Sets the agent configuration.
     @discardableResult
-    public func withConfiguration(_ config: AgentConfiguration) -> Agent {
+    func withConfiguration(_ config: AgentConfiguration) -> Agent {
         var copy = self
         copy.configuration = config
         return copy
@@ -2397,7 +2547,7 @@ public extension Agent {
     ///   - observer: Optional observer for lifecycle callbacks. Default: nil
     /// - Returns: The result of the agent's execution.
     /// - Throws: `AgentError` if execution fails, or `GuardrailError` if guardrails trigger.
-    public func callAsFunction(
+    func callAsFunction(
         _ input: String,
         session: (any Session)? = nil,
         observer: (any AgentObserver)? = nil

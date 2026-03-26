@@ -42,8 +42,8 @@ struct MembraneIntegrationTests {
 
         #expect(!prompt.contains("[... context truncated for strict4k budget ...]"))
 
-        #if SWARM_MEMBRANE
         #expect(plannedTools.count < tools.count)
+        #expect((await provider.tokenCountCalls).isEmpty == false)
 
         let schemaNames = plannedTools.map(\.name)
         #expect(schemaNames == schemaNames.sorted {
@@ -53,7 +53,6 @@ struct MembraneIntegrationTests {
         #expect(schemaNames.contains("Add_Tools"))
         #expect(schemaNames.contains("Remove_Tools"))
         #expect(schemaNames.contains("resolve_pointer"))
-        #endif
     }
 
     @Test("membraneRuntimeFeatureFlagsPropagateToProviderSettings")
@@ -170,13 +169,7 @@ struct MembraneIntegrationTests {
             toolSchemas: defaultAdapterToolSchemas(),
             profile: .strict4k
         )
-        // Without SWARM_MEMBRANE, plan() always uses allowAll mode (no JIT filtering).
-        // The exclusion assertion only applies when JIT is active.
-        #if SWARM_MEMBRANE
         #expect(planned.toolSchemas.contains(where: { $0.name == "zzz_tool" }) == false)
-        #else
-        _ = planned
-        #endif
     }
 }
 

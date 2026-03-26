@@ -51,7 +51,7 @@ struct ConduitInferenceProviderBridgeTests {
             let def = defs[defName] as? [String: Any]
             #expect(def?["enum"] as? [String] == ["c", "f"])
         } else {
-            #expect(false, "Expected units schema to contain either `enum` or `$ref` to a definition with `enum`.")
+            #expect(Bool(false), "Expected units schema to contain either `enum` or `$ref` to a definition with `enum`.")
         }
 
         let required = root["required"] as? [String]

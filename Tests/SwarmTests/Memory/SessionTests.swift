@@ -15,7 +15,7 @@ struct SessionTests {
     func sessionIdProperty() async {
         let session = InMemorySession()
 
-        let sessionId = await session.sessionId
+        let sessionId = session.sessionId
         #expect(!sessionId.isEmpty)
     }
 

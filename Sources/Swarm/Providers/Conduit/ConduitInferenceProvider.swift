@@ -1,10 +1,5 @@
-#if canImport(ConduitAdvanced)
 import ConduitAdvanced
 private typealias ConduitToolChoice = ConduitAdvanced.ToolChoice
-#else
-import Conduit
-private typealias ConduitToolChoice = Conduit.ToolChoice
-#endif
 import Foundation
 
 /// Bridges a Conduit TextGenerator into Swarm' InferenceProvider.
@@ -106,7 +101,7 @@ struct ConduitInferenceProvider<Provider: TextGenerator>: InferenceProvider,
                 case .required:
                     ConduitToolChoice.required
                 case .specific(let toolName):
-                    ConduitToolChoice.tool(name: toolName)
+                    ConduitToolChoice.named(toolName)
                 }
             config = config.toolChoice(conduitToolChoice)
         }
@@ -152,7 +147,7 @@ struct ConduitInferenceProvider<Provider: TextGenerator>: InferenceProvider,
                 case .required:
                     ConduitToolChoice.required
                 case .specific(let toolName):
-                    ConduitToolChoice.tool(name: toolName)
+                    ConduitToolChoice.named(toolName)
                 }
             config = config.toolChoice(conduitToolChoice)
         }
@@ -200,7 +195,7 @@ struct ConduitInferenceProvider<Provider: TextGenerator>: InferenceProvider,
                     case .required:
                         ConduitToolChoice.required
                     case .specific(let toolName):
-                        ConduitToolChoice.tool(name: toolName)
+                        ConduitToolChoice.named(toolName)
                     }
                 config = config.toolChoice(conduitToolChoice)
             }
@@ -290,7 +285,7 @@ struct ConduitInferenceProvider<Provider: TextGenerator>: InferenceProvider,
                     case .required:
                         ConduitToolChoice.required
                     case .specific(let toolName):
-                        ConduitToolChoice.tool(name: toolName)
+                        ConduitToolChoice.named(toolName)
                     }
                 config = config.toolChoice(conduitToolChoice)
             }
@@ -749,3 +744,11 @@ enum ConduitToolCallConverter {
         return result
     }
 }
+
+extension ConduitInferenceProvider: PromptTokenCounter where Provider: ConduitAdvanced.TokenCounter {
+    func countTokens(in text: String) async throws -> Int {
+        try await provider.countTokens(in: text, for: model).count
+    }
+}
+
+extension ConduitInferenceProvider: PromptTokenCountingInferenceProvider where Provider: ConduitAdvanced.TokenCounter {}

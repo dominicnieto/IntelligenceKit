@@ -12,9 +12,11 @@ import XCTest
 #if canImport(SwarmMacros)
     import SwarmMacros
 
-    let traceableMacros: [String: Macro.Type] = [
+    private func traceableMacros() -> [String: Macro.Type] {
+        [
         "Traceable": TraceableMacro.self
-    ]
+        ]
+    }
 #endif
 
 // MARK: - TraceableMacroTests
@@ -115,7 +117,7 @@ final class TraceableMacroTests: XCTestCase {
                     }
                 }
                 """,
-                macros: traceableMacros
+                macros: traceableMacros()
             )
         #else
             throw XCTSkip("macros are only supported when running tests for the host platform")
@@ -139,7 +141,7 @@ final class TraceableMacroTests: XCTestCase {
                 diagnostics: [
                     DiagnosticSpec(message: "@Traceable can only be applied to structs", line: 1, column: 1)
                 ],
-                macros: traceableMacros
+                macros: traceableMacros()
             )
         #else
             throw XCTSkip("macros are only supported when running tests for the host platform")

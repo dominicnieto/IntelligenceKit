@@ -25,9 +25,11 @@ struct Strict4kPromptEnvelopeTests {
             return
         }
 
-        let tokenCount = CharacterBasedTokenEstimator.shared.estimateTokens(for: prompt)
+        let tokenCountCalls = await provider.tokenCountCalls.count
+        let tokenCount = try await provider.countTokens(in: prompt)
         #expect(tokenCount <= ContextProfile.strict4k.budget.maxInputTokens)
         #expect(prompt.contains("needle-user-input"))
+        #expect(tokenCountCalls > 0)
     }
 
     @Test("Agent caps prompt to strict4k max input budget")
@@ -51,9 +53,11 @@ struct Strict4kPromptEnvelopeTests {
             return
         }
 
-        let tokenCount = CharacterBasedTokenEstimator.shared.estimateTokens(for: prompt)
+        let tokenCountCalls = await provider.tokenCountCalls.count
+        let tokenCount = try await provider.countTokens(in: prompt)
         #expect(tokenCount <= ContextProfile.strict4k.budget.maxInputTokens)
         #expect(prompt.contains("needle-user-input"))
+        #expect(tokenCountCalls > 0)
     }
 }
 

@@ -94,7 +94,7 @@ struct SlidingWindowMemoryTests {
         await memory.add(.user(String(repeating: "word ", count: 50)))
 
         // After eviction, check capacity status
-        let isNear = await memory.isNearCapacity
+        _ = await memory.isNearCapacity
         // May or may not be near capacity depending on eviction
     }
 

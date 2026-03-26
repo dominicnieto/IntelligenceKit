@@ -12,9 +12,11 @@ import XCTest
 #if canImport(SwarmMacros)
     import SwarmMacros
 
-    let promptMacros: [String: Macro.Type] = [
+    private func promptMacros() -> [String: Macro.Type] {
+        [
         "Prompt": PromptMacro.self
-    ]
+        ]
+    }
 #endif
 
 // MARK: - PromptMacroTests
@@ -31,7 +33,7 @@ final class PromptMacroTests: XCTestCase {
                 expandedSource: """
                 let prompt = PromptString(content: "You are a helpful assistant", interpolations: [])
                 """,
-                macros: promptMacros
+                macros: promptMacros()
             )
         #else
             throw XCTSkip("macros are only supported when running tests for the host platform")
@@ -47,7 +49,7 @@ final class PromptMacroTests: XCTestCase {
                 expandedSource: #"""
                 let prompt = PromptString(content: "You are \(role). Help with: \(task)", interpolations: ["role", "task"])
                 """#,
-                macros: promptMacros
+                macros: promptMacros()
             )
         #else
             throw XCTSkip("macros are only supported when running tests for the host platform")
@@ -67,7 +69,7 @@ final class PromptMacroTests: XCTestCase {
                 expandedSource: #"""
                 let prompt = PromptString(content: "You are a helpful assistant.\nAvailable tools: calculator, weather.\nPlease help the user.", interpolations: [])
                 """#,
-                macros: promptMacros
+                macros: promptMacros()
             )
         #else
             throw XCTSkip("macros are only supported when running tests for the host platform")
@@ -88,7 +90,7 @@ final class PromptMacroTests: XCTestCase {
                 diagnostics: [
                     DiagnosticSpec(message: "#Prompt requires a string argument", line: 1, column: 14)
                 ],
-                macros: promptMacros
+                macros: promptMacros()
             )
         #else
             throw XCTSkip("macros are only supported when running tests for the host platform")

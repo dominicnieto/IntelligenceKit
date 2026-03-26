@@ -3,11 +3,7 @@
 //
 // Minimal Conduit-backed provider selection for Swarm.
 
-#if canImport(ConduitAdvanced)
 import ConduitAdvanced
-#else
-import Conduit
-#endif
 import Foundation
 
 /// Convenience selection for Conduit-backed inference providers.
@@ -17,11 +13,11 @@ public enum ConduitProviderSelection: Sendable, InferenceProvider {
     case provider(any InferenceProvider)
 
     private static func anthropicModelID(_ model: String) -> AnthropicProvider.ModelID {
-        AnthropicProvider.ModelID(model)
+        .anthropic(model)
     }
 
     private static func openAIModelID(_ model: String) -> OpenAIProvider.ModelID {
-        OpenAIProvider.ModelID(model)
+        .openAI(model)
     }
 
     /// Creates a Conduit-backed Anthropic provider.
@@ -191,15 +187,10 @@ public enum ConduitProviderSelection: Sendable, InferenceProvider {
         model: String,
         routing: OpenRouterRouting?
     ) -> ConduitProviderSelection {
-        let provider: OpenAIProvider
-        if let routing {
-            provider = OpenAIProvider(configuration: OpenAIConfiguration(
-                endpoint: .openRouter,
-                authentication: .bearer(apiKey),
-                openRouterConfig: routing.toConduit()
-            ))
+        let provider = if let routing {
+            OpenAIProvider(openRouterKey: apiKey, routing: routing.toConduit())
         } else {
-            provider = OpenAIProvider(openRouterKey: apiKey)
+            OpenAIProvider(openRouterKey: apiKey)
         }
         let modelID = openAIModelID(model)
         let bridge = ConduitInferenceProvider(provider: provider, model: modelID)
@@ -211,8 +202,9 @@ public enum ConduitProviderSelection: Sendable, InferenceProvider {
         settings: OllamaSettings
     ) -> ConduitProviderSelection {
         let provider = OpenAIProvider(
-            configuration: .ollama(host: settings.host, port: settings.port)
-                .ollama(settings.toConduit())
+            ollamaHost: settings.host,
+            port: settings.port,
+            ollamaConfig: settings.toConduit()
         )
         let modelID = openAIModelID(model)
         let bridge = ConduitInferenceProvider(provider: provider, model: modelID)

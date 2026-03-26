@@ -261,8 +261,6 @@ struct TraceSpanTests {
     func spanInSet() {
         let span1 = TraceSpan(name: "span1")
         let span2 = TraceSpan(name: "span2")
-        let span3 = span1 // Same reference values if we use same id
-
         var set = Set<TraceSpan>()
         set.insert(span1)
         set.insert(span2)

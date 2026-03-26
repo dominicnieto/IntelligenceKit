@@ -10,7 +10,7 @@ struct SwarmConfigurationTests {
 
     @Test("configure sets global provider")
     func configureProvider() async throws {
-        try await withIsolatedConfiguration {
+        await withIsolatedConfiguration {
             let mock = MockInferenceProvider()
             await Swarm.configure(provider: mock)
             let resolved = await Swarm.defaultProvider
@@ -20,7 +20,7 @@ struct SwarmConfigurationTests {
 
     @Test("configure with cloud provider")
     func configureCloudProvider() async throws {
-        try await withIsolatedConfiguration {
+        await withIsolatedConfiguration {
             let mock = MockInferenceProvider()
             await Swarm.configure(cloudProvider: mock)
             let resolved = await Swarm.cloudProvider
@@ -30,7 +30,7 @@ struct SwarmConfigurationTests {
 
     @Test("reset clears all providers")
     func resetConfiguration() async throws {
-        try await withIsolatedConfiguration {
+        await withIsolatedConfiguration {
             let mock = MockInferenceProvider()
             await Swarm.configure(provider: mock)
             await Swarm.configure(cloudProvider: mock)
@@ -110,7 +110,7 @@ struct SwarmConfigurationTests {
 
     @Test("configure stores global web configuration")
     func configureWebConfiguration() async throws {
-        try await withIsolatedConfiguration {
+        await withIsolatedConfiguration {
             let configuration = testWebConfiguration(enabled: false)
             await Swarm.configure(web: configuration)
 

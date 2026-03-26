@@ -61,7 +61,7 @@ struct ToolGuardrailDataTests {
         #expect(data.agent != nil)
         #expect(data.agent?.configuration.name == "mock_agent")
 
-        let originalInput = await context.originalInput
+        let originalInput = context.originalInput
         #expect(originalInput == "test input")
     }
 

@@ -12,7 +12,9 @@ import Foundation
 /// context. Wax is used as the durable long-term layer for persisted recall.
 public actor DefaultAgentMemory: Memory, MemoryPromptDescriptor, MemorySessionLifecycle, MemorySessionImportPolicy, MemorySessionReplayAware, MemoryRetrievalPolicyAware {
     public struct Configuration: Sendable {
-        public static let `default` = Configuration()
+        public static var `default`: Self {
+            Configuration()
+        }
 
         public var contextCoreConfiguration: ContextCoreMemoryConfiguration
         public var waxStoreURL: URL
@@ -37,14 +39,14 @@ public actor DefaultAgentMemory: Memory, MemoryPromptDescriptor, MemorySessionLi
     public nonisolated let memoryPriority: MemoryPriorityHint = .primary
     public nonisolated let allowsAutomaticSessionSeeding = true
 
-    /// Working-set count for the primary ContextCore layer.
+    /// Composite count across the deduplicated working and durable layers.
     public var count: Int {
-        get async { await contextMemory.count }
+        get async { await compositeMessages().count }
     }
 
-    /// Whether the primary working set is empty.
+    /// Whether the deduplicated composite memory is empty.
     public var isEmpty: Bool {
-        get async { await contextMemory.isEmpty }
+        get async { await compositeMessages().isEmpty }
     }
 
     public init(configuration: Configuration = .default) throws {
@@ -55,14 +57,11 @@ public actor DefaultAgentMemory: Memory, MemoryPromptDescriptor, MemorySessionLi
     }
 
     public func add(_ message: MemoryMessage) async {
-        await contextMemory.add(message)
-
-        do {
-            let wax = try await ensureWaxMemory()
-            await wax.add(message)
-        } catch {
-            Log.memory.warning("DefaultAgentMemory: Failed to persist message to Wax: \(error.localizedDescription)")
+        guard await containsMessage(id: message.id) == false else {
+            return
         }
+
+        await persist(message)
     }
 
     public func context(for query: String, tokenLimit: Int) async -> String {
@@ -86,7 +85,7 @@ public actor DefaultAgentMemory: Memory, MemoryPromptDescriptor, MemorySessionLi
     }
 
     public func allMessages() async -> [MemoryMessage] {
-        await contextMemory.allMessages()
+        await compositeMessages()
     }
 
     /// Returns the primary working-set messages from ContextCore.
@@ -139,9 +138,9 @@ public actor DefaultAgentMemory: Memory, MemoryPromptDescriptor, MemorySessionLi
 
     public func importSessionHistory(_ messages: [MemoryMessage]) async {
         guard !messages.isEmpty else { return }
-        for message in messages {
-            await contextMemory.add(message)
-            await persistToWax(message)
+        var seenIDs = await compositeMessageIDs()
+        for message in messages where seenIDs.insert(message.id).inserted {
+            await persist(message)
         }
     }
 
@@ -173,15 +172,6 @@ public actor DefaultAgentMemory: Memory, MemoryPromptDescriptor, MemorySessionLi
         } catch {
             Log.memory.warning("DefaultAgentMemory: Failed to retrieve Wax context: \(error.localizedDescription)")
             return ""
-        }
-    }
-
-    private func persistToWax(_ message: MemoryMessage) async {
-        do {
-            let wax = try await ensureWaxMemory()
-            await wax.add(message)
-        } catch {
-            Log.memory.warning("DefaultAgentMemory: Failed to persist message to Wax: \(error.localizedDescription)")
         }
     }
 
@@ -296,6 +286,50 @@ public actor DefaultAgentMemory: Memory, MemoryPromptDescriptor, MemorySessionLi
     private func tokenCount(for text: String) async -> Int {
         let counter = AgentEnvironmentValues.current.promptTokenCounter
         return await PromptTokenBudgeting.countTokens(in: text, using: counter)
+    }
+
+    private func containsMessage(id: UUID) async -> Bool {
+        await compositeMessageIDs().contains(id)
+    }
+
+    private func compositeMessages() async -> [MemoryMessage] {
+        let working = await workingMessages()
+        let durable = await durableMessages()
+        return Self.uniqueMessages(working + durable)
+    }
+
+    private func compositeMessageIDs() async -> Set<UUID> {
+        Set(await compositeMessages().map(\.id))
+    }
+
+    private func persist(_ message: MemoryMessage) async {
+        await contextMemory.add(message)
+
+        do {
+            let wax = try await ensureWaxMemory()
+            await wax.add(message)
+        } catch {
+            Log.memory.warning("DefaultAgentMemory: Failed to persist message to Wax: \(error.localizedDescription)")
+        }
+    }
+
+    private static func uniqueMessages(_ messages: [MemoryMessage]) -> [MemoryMessage] {
+        var unique: [UUID: (message: MemoryMessage, firstIndex: Int)] = [:]
+        unique.reserveCapacity(messages.count)
+
+        for (index, message) in messages.enumerated() {
+            if unique[message.id] == nil {
+                unique[message.id] = (message, index)
+            }
+        }
+
+        return unique.values.sorted {
+            if $0.message.timestamp != $1.message.timestamp {
+                return $0.message.timestamp < $1.message.timestamp
+            }
+
+            return $0.firstIndex < $1.firstIndex
+        }.map(\.message)
     }
 
     private func prefix(_ text: String, maxCharacters: Int) -> String {

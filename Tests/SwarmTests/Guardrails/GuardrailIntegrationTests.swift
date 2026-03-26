@@ -65,7 +65,7 @@ struct GuardrailIntegrationTests {
         let mockProvider = MockInferenceProvider()
         await mockProvider.setResponses(["Final Answer: Success"])
 
-        let agent = await MockGuardrailAgent(
+        _ = MockGuardrailAgent(
             name: "TestAgent",
             inferenceProvider: mockProvider,
             responseHandler: { input in
@@ -100,7 +100,7 @@ struct GuardrailIntegrationTests {
     @Test("Agent with input guardrail triggered - execution halts with error")
     func agentWithInputGuardrailTriggered() async throws {
         // Given: An agent with a failing input guardrail
-        let agent = await MockGuardrailAgent(name: "TestAgent")
+        _ = MockGuardrailAgent(name: "TestAgent")
 
         // Input guardrail that triggers on sensitive content
         let inputGuardrail = InputGuard("sensitive_data_blocker") { input, _ in
@@ -145,8 +145,6 @@ struct GuardrailIntegrationTests {
     @Test("Agent with multiple input guardrails - executes in order")
     func agentWithMultipleInputGuardrails() async throws {
         // Given: An agent with multiple input guardrails
-        let agent = await MockGuardrailAgent(name: "TestAgent")
-
         actor ExecutionTracker {
             private var order: [String] = []
             func append(_ name: String) { order.append(name) }
@@ -194,7 +192,7 @@ struct GuardrailIntegrationTests {
     @Test("Agent with output guardrail passed - result returned normally")
     func agentWithOutputGuardrailPassed() async throws {
         // Given: An agent with output guardrail
-        let agent = await MockGuardrailAgent(
+        let agent = MockGuardrailAgent(
             name: "OutputAgent",
             responseHandler: { _ in "Safe output content" }
         )
@@ -227,7 +225,7 @@ struct GuardrailIntegrationTests {
     @Test("Agent with output guardrail triggered - throws after execution")
     func agentWithOutputGuardrailTriggered() async throws {
         // Given: An agent with output guardrail that detects inappropriate content
-        let agent = await MockGuardrailAgent(
+        let agent = MockGuardrailAgent(
             name: "OutputAgent",
             responseHandler: { _ in "This content contains profanity: damn" }
         )
@@ -282,7 +280,7 @@ struct GuardrailIntegrationTests {
     @Test("Tool execution with input guardrail - validates arguments before execution")
     func toolExecutionWithInputGuardrail() async throws {
         // Given: A tool with input guardrail
-        var tool = MockTool(
+        let tool = MockTool(
             name: "calculator",
             parameters: [
                 ToolParameter(name: "expression", description: "Math expression", type: .string, isRequired: true)
@@ -306,7 +304,7 @@ struct GuardrailIntegrationTests {
         }
 
         // When: Running tool guardrail with valid arguments
-        let agent = await MockGuardrailAgent(name: "ToolAgent")
+        let agent = MockGuardrailAgent(name: "ToolAgent")
         let context = AgentContext(input: "Calculate 2+2")
         let data = ToolGuardrailData(
             tool: tool,
@@ -326,7 +324,7 @@ struct GuardrailIntegrationTests {
     @Test("Tool execution with output guardrail - validates result after execution")
     func toolExecutionWithOutputGuardrail() async throws {
         // Given: A tool with output guardrail
-        var tool = MockTool(
+        let tool = MockTool(
             name: "web_search",
             result: .dictionary([
                 "results": .array([
@@ -361,7 +359,7 @@ struct GuardrailIntegrationTests {
         }
 
         // When: Running tool output guardrail
-        let agent = await MockGuardrailAgent(name: "SearchAgent")
+        let agent = MockGuardrailAgent(name: "SearchAgent")
         let context = AgentContext(input: "Search for Swift")
         let toolResult = try await tool.execute(arguments: [:])
         let data = ToolGuardrailData(
@@ -394,7 +392,7 @@ extension GuardrailIntegrationTests {
         // Then: Input guardrails run before execution, output guardrails run after
 
         // This test is a placeholder for when ToolRegistry integration is complete
-        #expect(true, "ToolRegistry integration pending implementation")
+        #expect(Bool(true), "ToolRegistry integration pending implementation")
     }
 
     // MARK: - Combined Scenarios
@@ -402,7 +400,7 @@ extension GuardrailIntegrationTests {
     @Test("Agent with both input and output guardrails - full validation flow")
     func agentWithBothInputAndOutputGuardrails() async throws {
         // Given: An agent with both input and output guardrails
-        let agent = await MockGuardrailAgent(
+        let agent = MockGuardrailAgent(
             name: "FullyGuardedAgent",
             responseHandler: { input in
                 "Processed and sanitized: \(input)"
@@ -458,7 +456,6 @@ extension GuardrailIntegrationTests {
     @Test("Guardrail with agent context - context flows through validation")
     func guardrailWithAgentContext() async throws {
         // Given: A guardrail that uses context data
-        let agent = await MockGuardrailAgent(name: "ContextAgent")
         let context = AgentContext(input: "Test input")
         await context.set("user_role", value: .string("admin"))
         await context.set("request_count", value: .int(5))
@@ -505,7 +502,7 @@ extension GuardrailIntegrationTests {
     @Test("Guardrail error propagation - errors bubble up correctly")
     func guardrailErrorPropagation() async throws {
         // Given: A guardrail that triggers
-        let agent = await MockGuardrailAgent(name: "ErrorAgent")
+        _ = MockGuardrailAgent(name: "ErrorAgent")
         let context = AgentContext(input: "Test")
 
         let inputGuardrail = InputGuard("error_trigger") { _, _ in
@@ -548,7 +545,7 @@ extension GuardrailIntegrationTests {
     @Test("Empty guardrail arrays - execution proceeds normally")
     func emptyGuardrailArrays() async throws {
         // Given: Agent with no guardrails
-        let agent = await MockGuardrailAgent(
+        let agent = MockGuardrailAgent(
             name: "UnguardedAgent",
             responseHandler: { input in "Response: \(input)" }
         )
@@ -580,7 +577,6 @@ extension GuardrailIntegrationTests {
     @Test("Guardrail metadata preserved - accessible after validation")
     func guardrailMetadataPreserved() async throws {
         // Given: A guardrail that sets metadata
-        let agent = await MockGuardrailAgent(name: "MetadataAgent")
         let context = AgentContext(input: "Test")
 
         let inputGuardrail = InputGuard("metadata_setter") { input, _ in
@@ -618,7 +614,6 @@ extension GuardrailIntegrationTests {
     @Test("Parallel input guardrails - run concurrently")
     func parallelInputGuardrails() async throws {
         // Given: Multiple parallel input guardrails
-        let agent = await MockGuardrailAgent(name: "ParallelAgent")
         let context = AgentContext(input: "Test")
 
         final class IntervalTracker: @unchecked Sendable {

@@ -4,8 +4,8 @@
 // Tests for the streaming event bridge in GraphAgent.
 
 import Foundation
+import HiveCore
 @testable import Swarm
-@testable import SwarmHive
 import Testing
 
 @Suite("GraphAgent streaming event bridge")

@@ -5,8 +5,8 @@
 
 import Foundation
 import Testing
+import HiveCore
 @testable import Swarm
-@testable import SwarmHive
 
 @Suite("Model Router Wiring")
 struct ModelRouterTests {

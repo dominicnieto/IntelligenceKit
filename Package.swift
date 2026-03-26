@@ -56,10 +56,10 @@ if useLocalDeps {
 } else {
     packageDependencies += [
         // Production graph must resolve to the published tag set that is known to build together.
-        .package(url: "https://github.com/christopherkarani/Wax.git", exact: "0.1.18"),
+        .package(url: "https://github.com/christopherkarani/Wax.git", exact: "0.1.19"),
         .package(
             url: "https://github.com/christopherkarani/Conduit",
-            exact: "0.3.5",
+            exact: "0.3.10",
             traits: [
                 .trait(name: "OpenAI"),
                 .trait(name: "OpenRouter"),
@@ -67,8 +67,8 @@ if useLocalDeps {
             ]
         ),
         .package(url: "https://github.com/christopherkarani/ContextCore.git", exact: "1.0.0"),
-        .package(url: "https://github.com/christopherkarani/Membrane", exact: "0.1.1"),
-        .package(url: "https://github.com/christopherkarani/Hive", exact: "0.1.7"),
+        .package(url: "https://github.com/christopherkarani/Membrane", exact: "0.1.3"),
+        .package(url: "https://github.com/christopherkarani/Hive", exact: "0.1.9"),
     ]
 }
 

@@ -434,7 +434,7 @@ struct TokenEstimatorTests {
             // Both should be Int (warning suppressed - test validates return type)
             _ = charResult
             _ = wordResult
-            #expect(true)
+            #expect(Bool(true))
         }
 
         @Test("Character estimator handles special characters")

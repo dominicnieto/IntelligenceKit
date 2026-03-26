@@ -1,7 +1,6 @@
 import CryptoKit
 import Foundation
 import HiveCore
-import Swarm
 
 enum ToolApprovalPolicy: Sendable, Equatable {
     case never
@@ -155,7 +154,7 @@ enum ChatGraph {
         let router: HiveRouter<Schema> = { store in
             do {
                 let pending = try store.get(Schema.pendingToolCallsKey)
-                return pending.isEmpty ? .end : .nodes([nodeIDs.tools])
+                return pending.isEmpty ? .end : .to([nodeIDs.tools])
             } catch {
                 Log.agents.error("Router failed to read pendingToolCallsKey, ending graph: \(error)")
                 return .end
@@ -812,7 +811,7 @@ extension ChatGraph {
                 AnyHiveWrite(Schema.pendingToolCallsKey, []),
                 AnyHiveWrite(Schema.messagesKey, messages)
             ],
-            next: .nodes([NodeID.model])
+            next: .to([NodeID.model])
         )
     }
 
@@ -836,7 +835,7 @@ extension ChatGraph {
             }
 
             guard calls.isEmpty == false else {
-                return HiveNodeOutput(next: .nodes([NodeID.model]))
+                return HiveNodeOutput(next: .to([NodeID.model]))
             }
 
             guard let registry = input.environment.tools else {
@@ -890,7 +889,7 @@ extension ChatGraph {
                     AnyHiveWrite(Schema.pendingToolCallsKey, []),
                     AnyHiveWrite(Schema.messagesKey, toolMessages)
                 ],
-                next: .nodes([NodeID.model])
+                next: .to([NodeID.model])
             )
         }
     }

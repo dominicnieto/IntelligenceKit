@@ -456,12 +456,9 @@ struct ArithmeticParserErrorCasesTests {
 
     @Test("Missing operand between operators")
     func missingOperandBetweenOperators() {
-        var caughtError = false
-
         do {
             _ = try ArithmeticParser.evaluate("2 + + 3")
         } catch {
-            caughtError = true
             // + can be unary, so this might actually parse as 2 + (+3) = 5
             // But let's verify it at least doesn't crash
         }

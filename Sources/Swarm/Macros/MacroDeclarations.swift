@@ -180,8 +180,9 @@ public macro Parameter(
 @attached(
     member,
     names: named(tools), named(instructions), named(configuration), named(memory), named(inferenceProvider),
-    named(tracer), named(_memory), named(_inferenceProvider), named(_tracer), named(isCancelled), named(init),
-    named(run), named(stream), named(cancel), named(Builder)
+    named(tracer), named(_memory), named(_defaultMemory), named(resolvedMemory), named(makeDefaultMemory),
+    named(_inferenceProvider), named(_tracer), named(isCancelled), named(init), named(run), named(stream),
+    named(cancel), named(Builder)
 )
 @attached(extension, conformances: AgentRuntime)
 public macro AgentActor(
@@ -247,8 +248,9 @@ public macro AgentActor(
 @attached(
     member,
     names: named(tools), named(instructions), named(configuration), named(memory), named(inferenceProvider),
-    named(tracer), named(_memory), named(_inferenceProvider), named(_tracer), named(isCancelled), named(init),
-    named(run), named(stream), named(cancel), named(Builder)
+    named(tracer), named(_memory), named(_defaultMemory), named(resolvedMemory), named(makeDefaultMemory),
+    named(_inferenceProvider), named(_tracer), named(isCancelled), named(init), named(run), named(stream),
+    named(cancel), named(Builder)
 )
 @attached(extension, conformances: AgentRuntime)
 public macro AgentActor(_ instructions: String) = #externalMacro(module: "SwarmMacros", type: "AgentMacro")

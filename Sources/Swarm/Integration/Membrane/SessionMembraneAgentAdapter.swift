@@ -1,6 +1,4 @@
 import Foundation
-
-#if SWARM_MEMBRANE
 import Membrane
 import MembraneCore
 
@@ -139,4 +137,3 @@ public extension MembraneEnvironment {
         )
     }
 }
-#endif

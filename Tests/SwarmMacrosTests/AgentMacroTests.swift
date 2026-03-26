@@ -12,9 +12,11 @@ import XCTest
 #if canImport(SwarmMacros)
     import SwarmMacros
 
-    let agentMacros: [String: Macro.Type] = [
+    private func agentMacros() -> [String: Macro.Type] {
+        [
         "AgentActor": AgentMacro.self
-    ]
+        ]
+    }
 #endif
 
 // MARK: - AgentMacroTests
@@ -47,9 +49,18 @@ final class AgentMacroTests: XCTestCase {
                     nonisolated public let configuration: AgentConfiguration
 
                     nonisolated public var memory: (any Memory)? {
-                        _memory ?? AgentEnvironmentValues.current.memory
+                        _memory
                     }
                     private nonisolated let _memory: (any Memory)?
+                    private nonisolated let _defaultMemory: (any Memory)?
+
+                    private nonisolated func resolvedMemory() -> (any Memory)? {
+                        _memory ?? AgentEnvironmentValues.current.memory ?? _defaultMemory
+                    }
+
+                    private static func makeDefaultMemory() -> (any Memory)? {
+                        try? DefaultAgentMemory()
+                    }
 
                     nonisolated public var inferenceProvider: (any InferenceProvider)? {
                         _inferenceProvider ?? AgentEnvironmentValues.current.inferenceProvider
@@ -75,6 +86,7 @@ final class AgentMacroTests: XCTestCase {
                         self.instructions = instructions
                         self.configuration = configuration
                         self._memory = memory
+                        self._defaultMemory = memory == nil ? Self.makeDefaultMemory() : nil
                         self._inferenceProvider = inferenceProvider
                         self._tracer = tracer
                     }
@@ -89,7 +101,7 @@ final class AgentMacroTests: XCTestCase {
                         }
 
                         let activeTracer = tracer ?? AgentEnvironmentValues.current.tracer
-                        let activeMemory = memory ?? AgentEnvironmentValues.current.memory
+                        let activeMemory = resolvedMemory()
                         let lifecycleMemory = activeMemory as? any MemorySessionLifecycle
 
                         let tracing = TracingHelper(
@@ -119,8 +131,12 @@ final class AgentMacroTests: XCTestCase {
                             if let mem = activeMemory {
                                 // Seed session history only once for a fresh memory instance.
                                 if session != nil, await mem.isEmpty, !sessionHistory.isEmpty {
-                                    for msg in sessionHistory {
-                                        await mem.add(msg)
+                                    if let replayAware = mem as? any MemorySessionReplayAware {
+                                        await replayAware.importSessionHistory(sessionHistory)
+                                    } else {
+                                        for msg in sessionHistory {
+                                            await mem.add(msg)
+                                        }
                                     }
                                 }
                                 await mem.add(userMessage)
@@ -299,7 +315,7 @@ final class AgentMacroTests: XCTestCase {
                 extension AssistantAgent: AgentRuntime {
                 }
                 """,
-                macros: agentMacros
+                macros: agentMacros()
             )
         #else
             throw XCTSkip("macros are only supported when running tests for the host platform")
@@ -333,9 +349,18 @@ final class AgentMacroTests: XCTestCase {
                     nonisolated public let configuration: AgentConfiguration
 
                     nonisolated public var memory: (any Memory)? {
-                        _memory ?? AgentEnvironmentValues.current.memory
+                        _memory
                     }
                     private nonisolated let _memory: (any Memory)?
+                    private nonisolated let _defaultMemory: (any Memory)?
+
+                    private nonisolated func resolvedMemory() -> (any Memory)? {
+                        _memory ?? AgentEnvironmentValues.current.memory ?? _defaultMemory
+                    }
+
+                    private static func makeDefaultMemory() -> (any Memory)? {
+                        try? DefaultAgentMemory()
+                    }
 
                     nonisolated public var inferenceProvider: (any InferenceProvider)? {
                         _inferenceProvider ?? AgentEnvironmentValues.current.inferenceProvider
@@ -361,6 +386,7 @@ final class AgentMacroTests: XCTestCase {
                         self.instructions = instructions
                         self.configuration = configuration
                         self._memory = memory
+                        self._defaultMemory = memory == nil ? Self.makeDefaultMemory() : nil
                         self._inferenceProvider = inferenceProvider
                         self._tracer = tracer
                     }
@@ -375,7 +401,7 @@ final class AgentMacroTests: XCTestCase {
                         }
 
                         let activeTracer = tracer ?? AgentEnvironmentValues.current.tracer
-                        let activeMemory = memory ?? AgentEnvironmentValues.current.memory
+                        let activeMemory = resolvedMemory()
                         let lifecycleMemory = activeMemory as? any MemorySessionLifecycle
 
                         let tracing = TracingHelper(
@@ -405,8 +431,12 @@ final class AgentMacroTests: XCTestCase {
                             if let mem = activeMemory {
                                 // Seed session history only once for a fresh memory instance.
                                 if session != nil, await mem.isEmpty, !sessionHistory.isEmpty {
-                                    for msg in sessionHistory {
-                                        await mem.add(msg)
+                                    if let replayAware = mem as? any MemorySessionReplayAware {
+                                        await replayAware.importSessionHistory(sessionHistory)
+                                    } else {
+                                        for msg in sessionHistory {
+                                            await mem.add(msg)
+                                        }
                                     }
                                 }
                                 await mem.add(userMessage)
@@ -585,7 +615,7 @@ final class AgentMacroTests: XCTestCase {
                 extension MathAgent: AgentRuntime {
                 }
                 """,
-                macros: agentMacros
+                macros: agentMacros()
             )
         #else
             throw XCTSkip("macros are only supported when running tests for the host platform")
@@ -619,7 +649,7 @@ extension AgentMacroTests {
                 diagnostics: [
                     DiagnosticSpec(message: "@AgentActor can only be applied to actors", line: 1, column: 1)
                 ],
-                macros: agentMacros
+                macros: agentMacros()
             )
         #else
             throw XCTSkip("macros are only supported when running tests for the host platform")
@@ -646,9 +676,18 @@ extension AgentMacroTests {
                     nonisolated public let configuration: AgentConfiguration
 
                     nonisolated public var memory: (any Memory)? {
-                        _memory ?? AgentEnvironmentValues.current.memory
+                        _memory
                     }
                     private nonisolated let _memory: (any Memory)?
+                    private nonisolated let _defaultMemory: (any Memory)?
+
+                    private nonisolated func resolvedMemory() -> (any Memory)? {
+                        _memory ?? AgentEnvironmentValues.current.memory ?? _defaultMemory
+                    }
+
+                    private static func makeDefaultMemory() -> (any Memory)? {
+                        try? DefaultAgentMemory()
+                    }
 
                     nonisolated public var inferenceProvider: (any InferenceProvider)? {
                         _inferenceProvider ?? AgentEnvironmentValues.current.inferenceProvider
@@ -674,6 +713,7 @@ extension AgentMacroTests {
                         self.instructions = instructions
                         self.configuration = configuration
                         self._memory = memory
+                        self._defaultMemory = memory == nil ? Self.makeDefaultMemory() : nil
                         self._inferenceProvider = inferenceProvider
                         self._tracer = tracer
                     }
@@ -811,7 +851,7 @@ extension AgentMacroTests {
                 extension IncompleteAgent: AgentRuntime {
                 }
                 """,
-                macros: agentMacros
+                macros: agentMacros()
             )
         #else
             throw XCTSkip("macros are only supported when running tests for the host platform")

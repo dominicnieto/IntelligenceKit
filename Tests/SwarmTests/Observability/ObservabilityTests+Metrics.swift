@@ -119,7 +119,7 @@ struct MetricsCollectorTests {
         let traceId = UUID()
 
         // 3 successful, 1 failed = 75% success rate
-        for i in 1...3 {
+        for _ in 1...3 {
             let spanId = UUID()
             await collector.trace(.agentStart(traceId: traceId, spanId: spanId, agentName: "Agent"))
             await collector.trace(.agentComplete(traceId: traceId, spanId: spanId, agentName: "Agent", duration: 1.0))

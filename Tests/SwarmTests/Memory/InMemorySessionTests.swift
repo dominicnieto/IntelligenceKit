@@ -17,7 +17,7 @@ struct InMemorySessionTests {
     func defaultSessionId() async {
         let session = InMemorySession()
 
-        let sessionId = await session.sessionId
+        let sessionId = session.sessionId
         #expect(!sessionId.isEmpty)
 
         // Verify it looks like a UUID (contains hyphens, 36 chars)
@@ -30,7 +30,7 @@ struct InMemorySessionTests {
         let customId = "my-custom-session-123"
         let session = InMemorySession(sessionId: customId)
 
-        let sessionId = await session.sessionId
+        let sessionId = session.sessionId
         #expect(sessionId == customId)
     }
 
@@ -39,8 +39,8 @@ struct InMemorySessionTests {
         let session1 = InMemorySession()
         let session2 = InMemorySession()
 
-        let id1 = await session1.sessionId
-        let id2 = await session2.sessionId
+        let id1 = session1.sessionId
+        let id2 = session2.sessionId
 
         #expect(id1 != id2)
     }
@@ -583,13 +583,13 @@ extension InMemorySessionTests {
     func sessionIdConstant() async throws {
         let session = InMemorySession(sessionId: "constant-id")
 
-        let id1 = await session.sessionId
+        let id1 = session.sessionId
 
         try await session.addItem(MemoryMessage.user("Test"))
-        let id2 = await session.sessionId
+        let id2 = session.sessionId
 
         try await session.clearSession()
-        let id3 = await session.sessionId
+        let id3 = session.sessionId
 
         #expect(id1 == "constant-id")
         #expect(id2 == "constant-id")

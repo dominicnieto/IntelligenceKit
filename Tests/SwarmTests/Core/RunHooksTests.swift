@@ -98,7 +98,6 @@ struct AgentObserverDefaultImplementationTests {
         struct EmptyObserver: AgentObserver {}
         let observer = EmptyObserver()
         let agent = MockAgentForAgentObserver()
-        let tool = MockTool(name: "test_tool")
         let result = AgentResult(output: "test")
 
         // When/Then: All default implementations should complete without crashing

@@ -12,3 +12,9 @@ public protocol MemorySessionLifecycle: Memory {
     func endMemorySession() async
 }
 
+/// Optional hook for memories that want custom handling when session history is replayed
+/// into a fresh memory instance.
+public protocol MemorySessionReplayAware: Memory {
+    /// Imports a batch of session history messages using memory-specific logic.
+    func importSessionHistory(_ messages: [MemoryMessage]) async
+}

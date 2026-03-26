@@ -6,7 +6,6 @@
 import CryptoKit
 import Foundation
 import HiveCore
-import Swarm
 
 // MARK: - GraphAgent
 

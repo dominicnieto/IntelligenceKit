@@ -82,7 +82,7 @@ actor CertifiedTextOnlyProvider: InferenceProvider {
     }
 }
 
-final class CertifiedPromptToolStreamingProvider: @preconcurrency ToolCallStreamingInferenceProvider,
+final class CertifiedPromptToolStreamingProvider: ToolCallStreamingInferenceProvider,
     CapabilityReportingInferenceProvider,
     @unchecked Sendable
 {

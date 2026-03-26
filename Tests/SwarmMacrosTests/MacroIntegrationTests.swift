@@ -197,7 +197,7 @@ struct ManualCalculatorTool: Tool, Sendable {
     ]
 
     func execute(arguments: [String: SendableValue]) async throws -> SendableValue {
-        guard let expression = arguments["expression"]?.stringValue else {
+        guard arguments["expression"]?.stringValue != nil else {
             throw AgentError.invalidToolArguments(
                 toolName: name,
                 reason: "Missing required parameter 'expression'"

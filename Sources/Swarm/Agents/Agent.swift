@@ -656,6 +656,81 @@ public struct Agent: AgentRuntime, Sendable {
         }
     }
 
+    private final class TimedOperationCoordinator<T: Sendable>: @unchecked Sendable {
+        private let lock = NSLock()
+        private var continuation: CheckedContinuation<T, Error>?
+        private var operationTask: Task<Void, Never>?
+        private var timeoutTask: Task<Void, Never>?
+        private var completed = false
+
+        func install(continuation: CheckedContinuation<T, Error>) {
+            lock.lock()
+            self.continuation = continuation
+            lock.unlock()
+        }
+
+        func setOperationTask(_ task: Task<Void, Never>) {
+            lock.lock()
+            operationTask = task
+            lock.unlock()
+        }
+
+        func setTimeoutTask(_ task: Task<Void, Never>) {
+            lock.lock()
+            timeoutTask = task
+            lock.unlock()
+        }
+
+        func finish(returning value: T) {
+            complete { continuation in
+                continuation.resume(returning: value)
+            }
+        }
+
+        func finish(throwing error: Error) {
+            complete { continuation in
+                continuation.resume(throwing: error)
+            }
+        }
+
+        func cancelPending(with error: Error) {
+            let pendingState = takePendingState()
+            pendingState.operationTask?.cancel()
+            pendingState.timeoutTask?.cancel()
+            pendingState.continuation?.resume(throwing: error)
+        }
+
+        private func complete(_ resume: (CheckedContinuation<T, Error>) -> Void) {
+            let pendingState = takePendingState()
+            pendingState.operationTask?.cancel()
+            pendingState.timeoutTask?.cancel()
+            guard let continuation = pendingState.continuation else { return }
+            resume(continuation)
+        }
+
+        private func takePendingState() -> (
+            continuation: CheckedContinuation<T, Error>?,
+            operationTask: Task<Void, Never>?,
+            timeoutTask: Task<Void, Never>?
+        ) {
+            lock.lock()
+            defer { lock.unlock() }
+
+            guard completed == false else {
+                return (nil, nil, nil)
+            }
+
+            completed = true
+            let pendingContinuation = continuation
+            let pendingOperationTask = operationTask
+            let pendingTimeoutTask = timeoutTask
+            continuation = nil
+            operationTask = nil
+            timeoutTask = nil
+            return (pendingContinuation, pendingOperationTask, pendingTimeoutTask)
+        }
+    }
+
     private actor DefaultMemorySessionTracker {
         private var sessionIDs: [ObjectIdentifier: String] = [:]
 
@@ -1295,20 +1370,40 @@ public struct Agent: AgentRuntime, Sendable {
             throw AgentError.timeout(duration: configuration.timeout)
         }
 
-        return try await withThrowingTaskGroup(of: T.self) { group in
-            group.addTask(operation: operation)
-            group.addTask { [timeout = configuration.timeout, remaining] in
-                try await Task.sleep(for: remaining)
-                throw AgentError.timeout(duration: timeout)
-            }
+        let coordinator = TimedOperationCoordinator<T>()
 
-            defer { group.cancelAll() }
+        return try await withTaskCancellationHandler(
+            operation: {
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<T, Error>) in
+                    coordinator.install(continuation: continuation)
 
-            guard let next = try await group.next() else {
-                throw AgentError.timeout(duration: configuration.timeout)
+                    let operationTask = Task {
+                        do {
+                            coordinator.finish(returning: try await operation())
+                        } catch {
+                            coordinator.finish(throwing: error)
+                        }
+                    }
+                    coordinator.setOperationTask(operationTask)
+
+                    let timeoutTask = Task { [timeout = configuration.timeout, remaining] in
+                        do {
+                            try await Task.sleep(for: remaining)
+                            operationTask.cancel()
+                            coordinator.finish(throwing: AgentError.timeout(duration: timeout))
+                        } catch is CancellationError {
+                            return
+                        } catch {
+                            coordinator.finish(throwing: error)
+                        }
+                    }
+                    coordinator.setTimeoutTask(timeoutTask)
+                }
+            },
+            onCancel: {
+                coordinator.cancelPending(with: CancellationError())
             }
-            return next
-        }
+        )
     }
 
     private func normalizeCancellation(_ error: Error) -> Error {

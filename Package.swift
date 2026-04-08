@@ -25,7 +25,7 @@ var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/christopherkarani/Wax.git", exact: "0.1.19"),
     .package(
         url: "https://github.com/christopherkarani/Conduit",
-        exact: "0.3.10",
+        exact: "0.3.13",
         traits: [
             .trait(name: "OpenAI"),
             .trait(name: "OpenRouter"),

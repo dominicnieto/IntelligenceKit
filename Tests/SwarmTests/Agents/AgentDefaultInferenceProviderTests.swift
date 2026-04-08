@@ -51,7 +51,10 @@ struct AgentDefaultInferenceProviderTests {
             options: .default
         )
 
+        let capabilities = InferenceProviderCapabilities.resolved(for: provider)
         #expect(response.finishReason == .toolCall || response.finishReason == .completed)
         #expect(!response.toolCalls.isEmpty || response.content != nil)
+        #expect(capabilities.contains(.nativeToolCalling))
+        #expect(capabilities.contains(.streamingToolCalls) == false)
     }
 }

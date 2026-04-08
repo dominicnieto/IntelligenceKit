@@ -18,11 +18,13 @@ struct ConduitInferenceProvider<Provider: TextGenerator>: InferenceProvider,
     init(
         provider: Provider,
         model: Provider.ModelID,
-        baseConfig: GenerateConfig = .default
+        baseConfig: GenerateConfig = .default,
+        supportsStreamingToolCalls: Bool = true
     ) {
         self.provider = provider
         self.model = model
         self.baseConfig = baseConfig
+        self.supportsStreamingToolCalls = supportsStreamingToolCalls
     }
 
     func generate(prompt: String, options: InferenceOptions) async throws -> String {
@@ -31,12 +33,15 @@ struct ConduitInferenceProvider<Provider: TextGenerator>: InferenceProvider,
     }
 
     var capabilities: InferenceProviderCapabilities {
-        [
+        var capabilities: InferenceProviderCapabilities = [
             .conversationMessages,
             .nativeToolCalling,
-            .streamingToolCalls,
             .structuredOutputs,
         ]
+        if supportsStreamingToolCalls {
+            capabilities.insert(.streamingToolCalls)
+        }
+        return capabilities
     }
 
     func stream(prompt: String, options: InferenceOptions) -> AsyncThrowingStream<String, Error> {
@@ -341,6 +346,7 @@ struct ConduitInferenceProvider<Provider: TextGenerator>: InferenceProvider,
     private let provider: Provider
     private let model: Provider.ModelID
     private let baseConfig: GenerateConfig
+    private let supportsStreamingToolCalls: Bool
 
     private static func conduitMessages(from messages: [InferenceMessage]) throws -> [Message] {
         let toolNamesByCallID = Dictionary(

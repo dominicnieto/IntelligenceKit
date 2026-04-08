@@ -3,8 +3,8 @@ import Testing
 
 @Suite("Inference Provider Capability Contract")
 struct InferenceProviderCapabilityContractTests {
-    @Test("Resolved capabilities merge explicit reporting with inferred protocol support")
-    func resolvedCapabilitiesMergeReportingAndInferredSupport() {
+    @Test("Resolved capabilities trust explicit reporting while preserving conversation support")
+    func resolvedCapabilitiesPreferExplicitReporting() {
         let provider = MockInferenceProvider(
             responses: ["ok"],
             capabilities: [.responseContinuation]

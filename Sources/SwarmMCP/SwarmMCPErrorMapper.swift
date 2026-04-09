@@ -271,6 +271,6 @@ enum SwarmMCPErrorMapper {
     }
 
     private static func textContent(_ text: String) -> MCP.Tool.Content {
-        .text(text)
+        .text(text: text, annotations: nil, _meta: nil)
     }
 }

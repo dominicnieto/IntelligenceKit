@@ -475,7 +475,7 @@ struct ConduitInferenceProvider<Provider: TextGenerator>: InferenceProvider,
         }
 
         if let parallelToolCalls = options.parallelToolCalls {
-            updated = updated.parallelToolCalls(parallelToolCalls)
+            updated = updated.parallelToolCalls(parallelToolCalls ? .enabled : .disabled)
         }
 
         if let structuredOutput = options.structuredOutput {

@@ -167,8 +167,8 @@ public struct AgentConfiguration: Sendable, Equatable {
         )
         #else
         AgentConfiguration(
-            contextMode: .strict4k,
-            sessionHistoryLimit: 12
+            sessionHistoryLimit: 12,
+            contextMode: .strict4k
         )
         #endif
     }

@@ -365,6 +365,36 @@ Bug reports and feature requests: [GitHub Issues](https://github.com/christopher
 
 If Swarm saves you time, [a star](https://github.com/christopherkarani/Swarm) helps others find it.
 
+## Fork Setup (Private)
+
+This is a private fork of [christopherkarani/Swarm](https://github.com/christopherkarani/Swarm). After cloning, run the setup script to configure the upstream remote:
+
+```bash
+bash setup-upstream.sh
+```
+
+This adds the original repo as a pull-only remote called `upstream`. You can fetch and pull changes, but pushes to upstream are disabled to prevent leaking private code.
+
+### Pulling upstream changes
+
+```bash
+# Fetch latest from the original repo
+git fetch upstream
+
+# Merge into your branch
+git merge upstream/main
+
+# Resolve any conflicts, then push to your private repo
+git push origin main
+```
+
+### What the script does
+
+1. Adds `https://github.com/christopherkarani/Swarm.git` as a remote named `upstream`
+2. Disables push on that remote (`git push upstream` will error)
+
+This is local git config — it doesn't persist across clones, which is why the script exists. Run it once after each fresh clone.
+
 ## License
 
 Released under the [MIT License](LICENSE).

@@ -204,7 +204,7 @@ public actor DefaultMembraneAgentAdapter: MembraneAgentAdapter {
             pointerThresholdBytes: effectiveThreshold,
             summaryMaxChars: profile.preset == .strict4k ? 120 : configuration.pointerSummaryMaxChars
         )
-        let resolver = PointerResolver(store: pointerStore as! InMemoryPointerStore, config: effectiveConfig)
+        let resolver = PointerResolver(store: pointerStore, config: effectiveConfig)
         let decision = try await resolver.pointerizeIfNeeded(toolName: toolName, output: output)
         switch decision {
         case let .inline(text):

@@ -44,6 +44,32 @@ public enum ConduitProviderSelection: Sendable, InferenceProvider {
         return .provider(bridge)
     }
 
+    // MARK: - Proxy Providers
+
+    /// Routes through a proxy to OpenAI-compatible backends.
+    ///
+    /// Auth is handled automatically via App Store subscription validation.
+    public static func proxy(
+        url: URL,
+        signedTransaction: String,
+        model: String
+    ) -> ConduitProviderSelection {
+        let auth = ProxyAuthentication(proxyURL: url, signedTransaction: signedTransaction)
+        let provider = OpenAIProvider(proxyAuth: auth, proxyURL: url)
+        let modelID = openAIModelID(model)
+        let bridge = ConduitInferenceProvider(provider: provider, model: modelID)
+        return .provider(bridge)
+    }
+
+    /// Routes through a proxy to Vercel AI Gateway using OpenAI wire format.
+    public static func vercelGateway(
+        url: URL,
+        signedTransaction: String,
+        model: String
+    ) -> ConduitProviderSelection {
+        proxy(url: url, signedTransaction: signedTransaction, model: model)
+    }
+
     /// Creates a Conduit-backed Apple Foundation Models provider.
     public static func foundationModels(
         configuration: FMConfiguration = .default
@@ -372,6 +398,22 @@ public extension InferenceProvider where Self == ConduitProviderSelection {
 
     static func openAI(apiKey: String, model: String = "gpt-4o") -> ConduitProviderSelection {
         ConduitProviderSelection.openAI(apiKey: apiKey, model: model)
+    }
+
+    static func proxy(
+        url: URL,
+        signedTransaction: String,
+        model: String
+    ) -> ConduitProviderSelection {
+        ConduitProviderSelection.proxy(url: url, signedTransaction: signedTransaction, model: model)
+    }
+
+    static func vercelGateway(
+        url: URL,
+        signedTransaction: String,
+        model: String
+    ) -> ConduitProviderSelection {
+        ConduitProviderSelection.vercelGateway(url: url, signedTransaction: signedTransaction, model: model)
     }
 
     static func foundationModels(

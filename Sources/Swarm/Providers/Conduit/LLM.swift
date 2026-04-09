@@ -25,6 +25,7 @@ public struct LLM: Sendable, InferenceProvider {
 
     private enum Kind: Sendable {
         case openAI(OpenAIConfig)
+        case proxy(ProxyConfig)
         case anthropic(AnthropicConfig)
         case openRouter(OpenRouterConfig)
         case minimax(MiniMaxConfig)
@@ -59,6 +60,22 @@ public struct LLM: Sendable, InferenceProvider {
         model: String = "gpt-4o-mini"
     ) -> LLM {
         openAI(apiKey: key, model: model)
+    }
+
+    public static func proxy(
+        url: URL,
+        signedTransaction: String,
+        model: String
+    ) -> LLM {
+        LLM(kind: .proxy(ProxyConfig(url: url, signedTransaction: signedTransaction, model: model)))
+    }
+
+    public static func vercelGateway(
+        url: URL,
+        signedTransaction: String,
+        model: String
+    ) -> LLM {
+        proxy(url: url, signedTransaction: signedTransaction, model: model)
     }
 
     public static func anthropic(
@@ -201,6 +218,15 @@ public struct LLM: Sendable, InferenceProvider {
         switch kind {
         case let .openAI(config):
             let provider = OpenAIProvider(apiKey: config.apiKey)
+            let modelID = Self.openAIModelID(config.model)
+            return ConduitInferenceProvider(
+                provider: provider,
+                model: modelID,
+                baseConfig: config.advanced.baseConfig
+            )
+        case let .proxy(config):
+            let auth = ProxyAuthentication(proxyURL: config.url, signedTransaction: config.signedTransaction)
+            let provider = OpenAIProvider(proxyAuth: auth, proxyURL: config.url)
             let modelID = Self.openAIModelID(config.model)
             return ConduitInferenceProvider(
                 provider: provider,
@@ -390,6 +416,22 @@ public extension InferenceProvider where Self == LLM {
         LLM.openAI(key: key, model: model)
     }
 
+    static func proxy(
+        url: URL,
+        signedTransaction: String,
+        model: String
+    ) -> LLM {
+        LLM.proxy(url: url, signedTransaction: signedTransaction, model: model)
+    }
+
+    static func vercelGateway(
+        url: URL,
+        signedTransaction: String,
+        model: String
+    ) -> LLM {
+        LLM.vercelGateway(url: url, signedTransaction: signedTransaction, model: model)
+    }
+
     static func anthropic(apiKey: String, model: String = "claude-3-5-sonnet-20241022") -> LLM {
         LLM.anthropic(apiKey: apiKey, model: model)
     }
@@ -468,6 +510,19 @@ extension LLM {
 
         init(apiKey: String, model: String) {
             self.apiKey = apiKey
+            self.model = model
+        }
+    }
+
+    struct ProxyConfig: Sendable {
+        var url: URL
+        var signedTransaction: String
+        var model: String
+        var advanced: AdvancedOptions = .default
+
+        init(url: URL, signedTransaction: String, model: String) {
+            self.url = url
+            self.signedTransaction = signedTransaction
             self.model = model
         }
     }

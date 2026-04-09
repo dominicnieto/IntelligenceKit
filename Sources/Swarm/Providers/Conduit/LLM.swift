@@ -70,12 +70,28 @@ public struct LLM: Sendable, InferenceProvider {
         LLM(kind: .proxy(ProxyConfig(url: url, signedTransaction: signedTransaction, model: model)))
     }
 
+    public static func proxy(
+        url: URL,
+        transaction: String,
+        model: String
+    ) -> LLM {
+        proxy(url: url, signedTransaction: transaction, model: model)
+    }
+
     public static func vercelGateway(
         url: URL,
         signedTransaction: String,
         model: String
     ) -> LLM {
         proxy(url: url, signedTransaction: signedTransaction, model: model)
+    }
+
+    public static func vercelGateway(
+        url: URL,
+        transaction: String,
+        model: String
+    ) -> LLM {
+        proxy(url: url, signedTransaction: transaction, model: model)
     }
 
     public static func anthropic(
@@ -424,12 +440,28 @@ public extension InferenceProvider where Self == LLM {
         LLM.proxy(url: url, signedTransaction: signedTransaction, model: model)
     }
 
+    static func proxy(
+        url: URL,
+        transaction: String,
+        model: String
+    ) -> LLM {
+        LLM.proxy(url: url, transaction: transaction, model: model)
+    }
+
     static func vercelGateway(
         url: URL,
         signedTransaction: String,
         model: String
     ) -> LLM {
         LLM.vercelGateway(url: url, signedTransaction: signedTransaction, model: model)
+    }
+
+    static func vercelGateway(
+        url: URL,
+        transaction: String,
+        model: String
+    ) -> LLM {
+        LLM.vercelGateway(url: url, transaction: transaction, model: model)
     }
 
     static func anthropic(apiKey: String, model: String = "claude-3-5-sonnet-20241022") -> LLM {

@@ -25,7 +25,7 @@ var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/christopherkarani/Wax.git", exact: "0.1.19"),
     .package(
         url: "git@github.com:dominicnieto/Conduit.git",
-        branch: "main",
+        branch: "production",
         traits: [
             .trait(name: "OpenAI"),
             .trait(name: "OpenRouter"),
@@ -34,7 +34,7 @@ var packageDependencies: [Package.Dependency] = [
         ]
     ),
     .package(url: "https://github.com/christopherkarani/ContextCore.git", exact: "1.0.0"),
-    .package(url: "https://github.com/christopherkarani/Membrane", exact: "0.1.3"),
+    .package(url: "https://github.com/dominicnieto/Membrane", branch: "production"),
     .package(url: "https://github.com/christopherkarani/Hive", exact: "0.1.9"),
 ]
 

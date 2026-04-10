@@ -1,9 +1,0 @@
-{
-  "object" : [
-    {
-      "mirror" : "git@github.com:dominicnieto/Conduit.git",
-      "original" : "https://github.com/christopherkarani/Conduit"
-    }
-  ],
-  "version" : 1
-}

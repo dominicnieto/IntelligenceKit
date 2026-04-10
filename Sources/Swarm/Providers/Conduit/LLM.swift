@@ -14,6 +14,7 @@ public struct LLM: Sendable, InferenceProvider {
     // MARK: - Private Storage
 
     private let kind: Kind
+    private let proxyAuth: ProxyAuthentication?
 
     private static func anthropicModelID(_ model: String) -> AnthropicProvider.ModelID {
         .anthropic(model)
@@ -44,6 +45,11 @@ public struct LLM: Sendable, InferenceProvider {
 
     private init(kind: Kind) {
         self.kind = kind
+        if case let .proxy(config) = kind {
+            self.proxyAuth = ProxyAuthentication(proxyURL: config.url, signedTransaction: config.signedTransaction)
+        } else {
+            self.proxyAuth = nil
+        }
     }
 
     // MARK: - Presets
@@ -241,7 +247,7 @@ public struct LLM: Sendable, InferenceProvider {
                 baseConfig: config.advanced.baseConfig
             )
         case let .proxy(config):
-            let auth = ProxyAuthentication(proxyURL: config.url, signedTransaction: config.signedTransaction)
+            let auth = proxyAuth ?? ProxyAuthentication(proxyURL: config.url, signedTransaction: config.signedTransaction)
             let provider = OpenAIProvider(proxyAuth: auth, proxyURL: config.url)
             let modelID = Self.openAIModelID(config.model)
             return ConduitInferenceProvider(

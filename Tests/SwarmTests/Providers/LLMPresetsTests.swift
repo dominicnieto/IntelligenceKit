@@ -51,6 +51,32 @@ struct LLMPresetsTests {
         }
     }
 
+    @Test("Proxy preset builds Conduit OpenAI-compatible provider")
+    func proxyPresetBuildsProvider() throws {
+        let url = try #require(URL(string: "https://proxy.example.com/v1"))
+        let preset: LLM = .proxy(url: url, signedTransaction: "signed-transaction", model: "gpt-4o-mini")
+        let agent = try Agent(preset)
+
+        let provider = try #require(agent.inferenceProvider)
+        #expect(provider is LLM)
+        if let preset = provider as? LLM {
+            #expect(preset._makeProviderForTesting() is ConduitInferenceProvider<OpenAIProvider>)
+        }
+    }
+
+    @Test("Vercel Gateway preset builds Conduit OpenAI-compatible provider")
+    func vercelGatewayPresetBuildsProvider() throws {
+        let url = try #require(URL(string: "https://proxy.example.com/v1"))
+        let preset: LLM = .vercelGateway(url: url, signedTransaction: "signed-transaction", model: "openai/gpt-5")
+        let agent = try Agent(preset)
+
+        let provider = try #require(agent.inferenceProvider)
+        #expect(provider is LLM)
+        if let preset = provider as? LLM {
+            #expect(preset._makeProviderForTesting() is ConduitInferenceProvider<OpenAIProvider>)
+        }
+    }
+
     @Test("MiniMax preset builds Conduit OpenAI-compatible provider")
     func minimaxPresetBuildsProvider() throws {
         let agent = try Agent(.minimax(key: "test-key", model: "minimax-01"))
@@ -132,6 +158,32 @@ struct LLMPresetsTests {
         #expect(configuration.healthCheck == false)
     }
 
+    @Test("LLM proxy preset reuses one proxy authentication actor")
+    func llmProxyPresetReusesProxyAuthentication() throws {
+        let url = try #require(URL(string: "https://proxy.example.com/v1"))
+        let preset = LLM.proxy(url: url, signedTransaction: "signed-transaction", model: "gpt-4o-mini")
+
+        let firstProvider = preset._makeProviderForTesting()
+        let secondProvider = preset._makeProviderForTesting()
+        let firstAuth = try #require(mirroredProxyAuthentication(from: firstProvider))
+        let secondAuth = try #require(mirroredProxyAuthentication(from: secondProvider))
+
+        #expect(ObjectIdentifier(firstAuth) == ObjectIdentifier(secondAuth))
+    }
+
+    @Test("LLM Vercel Gateway preset reuses one proxy authentication actor")
+    func llmVercelGatewayPresetReusesProxyAuthentication() throws {
+        let url = try #require(URL(string: "https://proxy.example.com/v1"))
+        let preset = LLM.vercelGateway(url: url, signedTransaction: "signed-transaction", model: "openai/gpt-5")
+
+        let firstProvider = preset._makeProviderForTesting()
+        let secondProvider = preset._makeProviderForTesting()
+        let firstAuth = try #require(mirroredProxyAuthentication(from: firstProvider))
+        let secondAuth = try #require(mirroredProxyAuthentication(from: secondProvider))
+
+        #expect(ObjectIdentifier(firstAuth) == ObjectIdentifier(secondAuth))
+    }
+
 #if canImport(MLX)
     @Test("MLX preset builds a text-only conversation adapter")
     func mlxPresetBuildsTextOnlyConversationAdapter() throws {
@@ -196,6 +248,16 @@ private func mirroredOllamaConfiguration(from provider: Any) -> (
         unwrapMirrorOptional(mirror.descendant("numCtx")) as? Int,
         unwrapMirrorOptional(mirror.descendant("healthCheck")) as? Bool
     )
+}
+
+private func mirroredProxyAuthentication(from provider: Any) -> ProxyAuthentication? {
+    guard let rawProvider = unwrapMirrorOptional(Mirror(reflecting: provider).descendant("provider")),
+          let proxyAuth = unwrapMirrorOptional(Mirror(reflecting: rawProvider).descendant("proxyAuth")) as? ProxyAuthentication
+    else {
+        return nil
+    }
+
+    return proxyAuth
 }
 
 private func unwrapMirrorOptional(_ value: Any?) -> Any? {

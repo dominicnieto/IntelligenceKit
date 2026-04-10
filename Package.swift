@@ -22,7 +22,7 @@ var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.11.0"),
     .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.13.2"),
     // Production graph must resolve to the published tag set that is known to build together.
-    .package(url: "https://github.com/christopherkarani/Wax.git", exact: "0.1.19"),
+    .package(url: "https://github.com/dominicnieto/Wax.git", branch: "production"),
     .package(
         url: "https://github.com/dominicnieto/Conduit.git",
         branch: "production",
@@ -33,7 +33,7 @@ var packageDependencies: [Package.Dependency] = [
             .trait(name: "MLX"),
         ]
     ),
-    .package(url: "https://github.com/christopherkarani/ContextCore.git", exact: "1.0.0"),
+    .package(url: "https://github.com/dominicnieto/ContextCore.git", branch: "production"),
     .package(url: "https://github.com/dominicnieto/Membrane", branch: "production"),
     .package(url: "https://github.com/dominicnieto/Hive", branch: "production"),
 ]

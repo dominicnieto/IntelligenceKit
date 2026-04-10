@@ -30,6 +30,46 @@ struct ConduitProviderSelectionTests {
         #expect(provider is ConduitInferenceProvider<OpenAIProvider>)
     }
 
+    @Test("Builds proxy-backed Conduit provider")
+    func buildsProxyProvider() throws {
+        let url = try #require(URL(string: "https://proxy.example.com/v1"))
+        let provider = ConduitProviderSelection
+            .proxy(url: url, signedTransaction: "signed-transaction", model: "gpt-4o-mini")
+            .makeProvider()
+
+        #expect(provider is ConduitInferenceProvider<OpenAIProvider>)
+        let proxyAuth = try #require(mirroredProxyAuthentication(from: provider))
+        #expect(type(of: proxyAuth) == ProxyAuthentication.self)
+    }
+
+    @Test("Builds Vercel Gateway-backed Conduit provider")
+    func buildsVercelGatewayProvider() throws {
+        let url = try #require(URL(string: "https://proxy.example.com/v1"))
+        let provider = ConduitProviderSelection
+            .vercelGateway(url: url, signedTransaction: "signed-transaction", model: "openai/gpt-5")
+            .makeProvider()
+
+        #expect(provider is ConduitInferenceProvider<OpenAIProvider>)
+        let proxyAuth = try #require(mirroredProxyAuthentication(from: provider))
+        #expect(type(of: proxyAuth) == ProxyAuthentication.self)
+    }
+
+    @Test("Proxy dot-syntax resolves for ConduitProviderSelection")
+    func proxyDotSyntaxResolves() throws {
+        let url = try #require(URL(string: "https://proxy.example.com/v1"))
+        let selection: ConduitProviderSelection = .proxy(url: url, signedTransaction: "signed-transaction", model: "gpt-4o-mini")
+
+        #expect(selection.makeProvider() is ConduitInferenceProvider<OpenAIProvider>)
+    }
+
+    @Test("Vercel Gateway dot-syntax resolves for ConduitProviderSelection")
+    func vercelGatewayDotSyntaxResolves() throws {
+        let url = try #require(URL(string: "https://proxy.example.com/v1"))
+        let selection: ConduitProviderSelection = .vercelGateway(url: url, signedTransaction: "signed-transaction", model: "openai/gpt-5")
+
+        #expect(selection.makeProvider() is ConduitInferenceProvider<OpenAIProvider>)
+    }
+
 #if canImport(FoundationModels)
     @Test("Builds Foundation Models Conduit provider without streaming tool-call capability")
     func buildsFoundationModelsProvider() {
@@ -244,6 +284,16 @@ private func mirroredOllamaConfiguration(from provider: Any) -> (
         unwrapMirrorOptional(mirror.descendant("numCtx")) as? Int,
         unwrapMirrorOptional(mirror.descendant("healthCheck")) as? Bool
     )
+}
+
+private func mirroredProxyAuthentication(from provider: Any) -> ProxyAuthentication? {
+    guard let rawProvider = unwrapMirrorOptional(Mirror(reflecting: provider).descendant("provider")),
+          let proxyAuth = unwrapMirrorOptional(Mirror(reflecting: rawProvider).descendant("proxyAuth")) as? ProxyAuthentication
+    else {
+        return nil
+    }
+
+    return proxyAuth
 }
 
 private func unwrapMirrorOptional(_ value: Any?) -> Any? {

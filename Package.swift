@@ -24,7 +24,7 @@ var packageDependencies: [Package.Dependency] = [
     // Production graph must resolve to the published tag set that is known to build together.
     .package(url: "https://github.com/christopherkarani/Wax.git", exact: "0.1.19"),
     .package(
-        url: "git@github.com:dominicnieto/Conduit.git",
+        url: "https://github.com/dominicnieto/Conduit.git",
         branch: "production",
         traits: [
             .trait(name: "OpenAI"),

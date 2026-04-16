@@ -7,7 +7,20 @@ import Foundation
 
 // MARK: - GuardrailError
 
-/// Errors related to guardrail execution.
+/// Errors raised when a guardrail tripwire fires or a guardrail's body throws.
+///
+/// ```swift
+/// do {
+///     let result = try await agent.run(input)
+/// } catch let error as GuardrailError {
+///     print("Guardrail stopped execution: \(error.localizedDescription)")
+/// }
+/// ```
+///
+/// ## See Also
+/// - ``AgentError``
+/// - ``WorkflowError``
+/// - <doc:ErrorHandling>
 public enum GuardrailError: Error, Sendable, LocalizedError, Equatable {
     // MARK: Public
 
@@ -26,14 +39,16 @@ public enum GuardrailError: Error, Sendable, LocalizedError, Equatable {
         }
     }
 
-    /// Input guardrail tripwire was triggered
+    /// An input guardrail tripped before the agent processed the user's request.
+    /// - Parameter outputInfo: arbitrary diagnostic payload from the guardrail, if any
     case inputTripwireTriggered(
         guardrailName: String,
         message: String?,
         outputInfo: SendableValue?
     )
 
-    /// Output guardrail tripwire was triggered
+    /// An output guardrail tripped on the agent's response before it was returned.
+    /// - Parameter outputInfo: arbitrary diagnostic payload from the guardrail, if any
     case outputTripwireTriggered(
         guardrailName: String,
         agentName: String,
@@ -41,7 +56,8 @@ public enum GuardrailError: Error, Sendable, LocalizedError, Equatable {
         outputInfo: SendableValue?
     )
 
-    /// Tool input guardrail tripwire was triggered
+    /// A tool-input guardrail tripped on arguments the model generated for a tool.
+    /// - Parameter outputInfo: arbitrary diagnostic payload from the guardrail, if any
     case toolInputTripwireTriggered(
         guardrailName: String,
         toolName: String,
@@ -49,7 +65,8 @@ public enum GuardrailError: Error, Sendable, LocalizedError, Equatable {
         outputInfo: SendableValue?
     )
 
-    /// Tool output guardrail tripwire was triggered
+    /// A tool-output guardrail tripped on a tool's result before it was fed back to the model.
+    /// - Parameter outputInfo: arbitrary diagnostic payload from the guardrail, if any
     case toolOutputTripwireTriggered(
         guardrailName: String,
         toolName: String,
@@ -57,7 +74,7 @@ public enum GuardrailError: Error, Sendable, LocalizedError, Equatable {
         outputInfo: SendableValue?
     )
 
-    /// Guardrail execution failed
+    /// The guardrail's own body threw while evaluating.
     case executionFailed(guardrailName: String, underlyingError: String)
 }
 

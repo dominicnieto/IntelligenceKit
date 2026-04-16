@@ -7,7 +7,21 @@ import Foundation
 
 // MARK: - WorkflowError
 
-/// Errors that can occur during multi-agent workflow execution.
+/// Errors raised by ``Workflow`` composition, routing, handoffs, or durable
+/// checkpoint resume.
+///
+/// ```swift
+/// do {
+///     let result = try await workflow.run(input)
+/// } catch let error as WorkflowError {
+///     print("Workflow failed: \(error.localizedDescription)")
+/// }
+/// ```
+///
+/// ## See Also
+/// - ``AgentError``
+/// - ``GuardrailError``
+/// - <doc:ErrorHandling>
 public enum WorkflowError: Error, Sendable, Equatable {
     // MARK: - Agent Registration Errors
 
@@ -49,7 +63,9 @@ public enum WorkflowError: Error, Sendable, Equatable {
     /// Workflow was interrupted (e.g. by an `Interrupt` step).
     case workflowInterrupted(reason: String)
 
-    /// User-configurable orchestration graph failed validation.
+    /// The orchestration graph failed structural validation; the associated
+    /// ``WorkflowValidationError`` carries the specific issue (cycle, unreachable
+    /// node, dangling edge, etc.).
     case invalidGraph(WorkflowValidationError)
 
     /// Human approval request timed out.

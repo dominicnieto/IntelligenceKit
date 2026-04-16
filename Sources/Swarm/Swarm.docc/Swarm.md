@@ -22,6 +22,11 @@ Foundation Models, MLX).
 ### Tools
 - ``Tool``
 - ``AnyJSONTool``
+- ``FunctionTool``
+- ``ToolParameter``
+- ``ToolSchema``
+- ``ToolRegistry``
+- <doc:ToolAuthoring>
 
 ### Memory and Sessions
 - ``Memory``

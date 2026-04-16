@@ -14,7 +14,6 @@ public struct LLM: Sendable, InferenceProvider {
     // MARK: - Private Storage
 
     private let kind: Kind
-    private let proxyAuth: ProxyAuthentication?
 
     private static func anthropicModelID(_ model: String) -> AnthropicProvider.ModelID {
         .anthropic(model)
@@ -26,7 +25,7 @@ public struct LLM: Sendable, InferenceProvider {
 
     private enum Kind: Sendable {
         case openAI(OpenAIConfig)
-        case proxy(ProxyConfig)
+        case proxy(ProxyConfig, ProxyAuthentication)
         case anthropic(AnthropicConfig)
         case openRouter(OpenRouterConfig)
         case minimax(MiniMaxConfig)
@@ -45,11 +44,6 @@ public struct LLM: Sendable, InferenceProvider {
 
     private init(kind: Kind) {
         self.kind = kind
-        if case let .proxy(config) = kind {
-            self.proxyAuth = ProxyAuthentication(proxyURL: config.url, signedTransaction: config.signedTransaction)
-        } else {
-            self.proxyAuth = nil
-        }
     }
 
     // MARK: - Presets
@@ -73,7 +67,9 @@ public struct LLM: Sendable, InferenceProvider {
         signedTransaction: String,
         model: String
     ) -> LLM {
-        LLM(kind: .proxy(ProxyConfig(url: url, signedTransaction: signedTransaction, model: model)))
+        let config = ProxyConfig(url: url, signedTransaction: signedTransaction, model: model)
+        let auth = ProxyAuthentication(proxyURL: url, signedTransaction: signedTransaction)
+        return LLM(kind: .proxy(config, auth))
     }
 
     public static func proxy(
@@ -246,8 +242,7 @@ public struct LLM: Sendable, InferenceProvider {
                 model: modelID,
                 baseConfig: config.advanced.baseConfig
             )
-        case let .proxy(config):
-            let auth = proxyAuth ?? ProxyAuthentication(proxyURL: config.url, signedTransaction: config.signedTransaction)
+        case let .proxy(config, auth):
             let provider = OpenAIProvider(proxyAuth: auth, proxyURL: config.url)
             let modelID = Self.openAIModelID(config.model)
             return ConduitInferenceProvider(

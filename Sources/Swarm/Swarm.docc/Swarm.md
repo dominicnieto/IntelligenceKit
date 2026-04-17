@@ -13,8 +13,11 @@ Foundation Models, MLX).
 
 ### Essentials
 - ``Agent``
+- ``AgentRuntime``
 - ``AgentConfiguration``
 - ``AgentResult``
+- ``AgentResponse``
+- <doc:AgentGuide>
 
 ### Workflows
 - ``Workflow``

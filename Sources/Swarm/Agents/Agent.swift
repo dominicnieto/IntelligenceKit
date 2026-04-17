@@ -7,236 +7,82 @@ import Foundation
 
 // MARK: - Agent
 
-/// An agent that uses structured LLM tool calling APIs for reliable tool invocation.
+/// The framework's primary agent type — structured tool calling, memory,
+/// guardrails, and handoffs over any ``InferenceProvider``.
 ///
-/// Unlike Agent which parses tool calls from text output, Agent
-/// leverages the LLM's native tool calling capabilities via `generateWithToolCalls()`
-/// for more reliable and type-safe tool invocation.
-///
-/// If no inference provider is configured, Agent will try to use Apple Foundation Models
-/// (on-device) when available. If Foundation Models are unavailable and no provider is set,
-/// Agent throws `AgentError.inferenceProviderUnavailable`.
-///
-/// Provider resolution order is:
-/// 1. An explicit provider passed to `Agent(...)` (including `Agent(_:)`)
-/// 2. A provider set via `.environment(\.inferenceProvider, ...)`
-/// 3. `Swarm.defaultProvider` (set via `Swarm.configure(provider:)`)
-/// 4. `Swarm.cloudProvider` (set via `Swarm.configure(cloudProvider:)`, when tool calling is required)
-/// 5. Apple Foundation Models (on-device), if available, including prompt-based tool emulation
-/// 6. Otherwise, throw `AgentError.inferenceProviderUnavailable`
-///
-/// The agent follows a loop-based execution pattern:
-/// 1. Build prompt with system instructions + conversation history
-/// 2. Call provider with tool schemas
-/// 3. If tool calls requested, execute each tool and add results to history
-/// 4. If no tool calls, return content as final answer
-/// 5. Repeat until done or max iterations reached
-///
-/// Example:
 /// ```swift
-/// let agent = Agent(
+/// let agent = try Agent(
 ///     tools: [WeatherTool(), CalculatorTool()],
 ///     instructions: "You are a helpful assistant with access to tools."
 /// )
-///
 /// let result = try await agent.run("What's the weather in Tokyo?")
-/// print(result.output)
 /// ```
+///
+/// For the init decision tree, provider resolution order, and run/stream/
+/// structured-output choices see <doc:AgentGuide>. Sub-topics have dedicated
+/// articles: <doc:ToolAuthoring>, <doc:MemoryAndSessions>, <doc:Guardrails>,
+/// <doc:WorkflowComposition>, <doc:Streaming>, <doc:ErrorHandling>.
+///
+/// ## See Also
+/// - ``AgentRuntime``
+/// - ``AgentConfiguration``
+/// - ``AgentResult``
+/// - ``AgentResponse``
 public struct Agent: AgentRuntime, Sendable {
     // MARK: Public
 
     // MARK: - Agent Protocol Properties
 
-    /// The tools available to this agent for function calling.
-    ///
-    /// Tools are registered at initialization and remain immutable throughout the agent's lifetime.
-    /// The agent uses these tool schemas to inform the LLM about available capabilities.
-    ///
-    /// To add tools, use the ``init(_:configuration:memory:inferenceProvider:tracer:inputGuardrails:outputGuardrails:guardrailRunnerConfiguration:handoffs:tools:)`` initializer
-    /// with a `@ToolBuilder` closure, or the ``Builder`` API.
-    ///
-    /// ## Tool Execution
-    /// When the LLM requests a tool call, the agent executes the corresponding tool
-    /// and returns the result to the LLM for further processing.
+    /// Tools the agent can call during a run. See <doc:ToolAuthoring>.
     public private(set) var tools: [any AnyJSONTool]
 
-    /// The system instructions that define this agent's behavior and capabilities.
-    ///
-    /// Instructions are sent to the LLM with every request to guide the agent's responses,
-    /// personality, and decision-making. They describe what the agent should do, how it
-    /// should behave, and any constraints it should follow.
-    ///
-    /// If no instructions are provided, a default instruction set is used:
-    /// `"You are a helpful AI assistant with access to tools."`
-    ///
-    /// ## Example Instructions
-    /// ```swift
-    /// "You are a weather assistant. Be concise and friendly."
-    /// ```
-    ///
-    /// To set instructions, use any of the ``Agent`` initializers or the ``Builder/instructions(_:)`` method.
+    /// System instructions prepended to every turn.
     public private(set) var instructions: String
 
-    /// The runtime configuration settings for this agent.
-    ///
-    /// Configuration controls agent behavior such as maximum iterations, timeout duration,
-    /// streaming preferences, and the agent's display name. Use this to customize
-    /// how the agent executes during a run.
-    ///
-    /// ## Default Configuration
-    /// If not specified, the agent uses ``AgentConfiguration/default`` which provides
-    /// sensible defaults for most use cases.
-    ///
-    /// ## Customizing Configuration
-    /// ```swift
-    /// let config = AgentConfiguration.default
-    ///     .maxIterations(10)
-    ///     .timeout(.seconds(30))
-    ///
-    /// let agent = Agent(instructions: "Helpful assistant", configuration: config)
-    /// ```
-    ///
-    /// See ``AgentConfiguration`` for all available configuration options.
+    /// Runtime settings — iteration cap, timeout, sampling, streaming, and more.
+    /// See ``AgentConfiguration``.
     public private(set) var configuration: AgentConfiguration
 
-    /// The explicitly configured memory system for conversation history and context retrieval.
-    ///
-    /// When configured, the agent uses memory to:
-    /// - Retrieve relevant context from previous conversations (RAG)
-    /// - Store conversation summaries for long-term context
-    /// - Provide additional context to the LLM beyond the current session
-    ///
-    /// ## Memory vs Session
-    /// - **Memory**: Provides additional context (RAG, summaries) - not for conversation storage
-    /// - **Session**: Stores the actual conversation history and is the source of truth for transcripts
-    ///
-    /// If no explicit memory is set, Swarm still uses a composite default memory
-    /// internally: ContextCore for working context and Wax for durable recall.
-    /// This property only reflects an explicit override.
-    ///
-    /// ## Setting Memory
-    /// Use ``init(_:configuration:memory:inferenceProvider:tracer:inputGuardrails:outputGuardrails:guardrailRunnerConfiguration:handoffs:tools:)``
-    /// or the ``Builder/memory(_:)`` method.
-    ///
-    /// See ``Memory`` for available memory implementations.
+    /// Explicit memory override. Reflects only values set by the caller; when
+    /// `nil`, the runtime uses a composite default (ContextCore + Wax).
+    /// See <doc:MemoryAndSessions>.
     public private(set) var memory: (any Memory)?
     private let defaultMemory: (any Memory)?
 
-    /// The optional custom inference provider for LLM requests.
-    ///
-    /// The inference provider determines which LLM backend the agent uses for generating
-    /// responses. If not set, the agent follows a resolution order to find a provider:
-    ///
-    /// 1. Explicit provider passed to ``Agent`` initialization
-    /// 2. Provider set via `.environment(\.inferenceProvider, ...)`
-    /// 3. ``Swarm/defaultProvider`` (configured via `Swarm.configure(provider:)`)
-    /// 4. ``Swarm/cloudProvider`` (configured via `Swarm.configure(cloudProvider:)`)
-    /// 5. Apple Foundation Models (on-device), if available
-    /// 6. Throws ``AgentError/inferenceProviderUnavailable``
-    ///
-    /// ## Usage
-    /// Set a specific provider when you want this agent to use a different LLM than
-    /// the globally configured one.
+    /// Optional per-agent inference provider. When `nil`, resolution falls
+    /// through to environment, `Swarm.configure(...)`, Foundation Models.
+    /// See <doc:AgentGuide> for the full resolution order.
     public private(set) var inferenceProvider: (any InferenceProvider)?
 
-    /// The input validation guardrails for this agent.
-    ///
-    /// Input guardrails validate user input before it's processed by the agent.
-    /// They can reject inappropriate requests, check for safety concerns, or enforce
-    /// business rules before the LLM is invoked.
-    ///
-    /// Guardrails are executed in order during ``run(_:session:observer:)`` and
-    /// ``stream(_:session:observer:)`` before any LLM calls are made.
-    ///
-    /// ## Adding Guardrails
-    /// Use the ``Builder/inputGuardrails(_:)`` or ``Builder/addInputGuardrail(_:)`` methods.
-    ///
-    /// See ``InputGuardrail`` for creating custom guardrails.
+    /// Guardrails that validate user input before the agent processes it.
+    /// See <doc:Guardrails>.
     public private(set) var inputGuardrails: [any InputGuardrail]
 
-    /// The output validation guardrails for this agent.
-    ///
-    /// Output guardrails validate the agent's responses before they are returned to the user.
-    /// They can check for harmful content, enforce output format requirements, or
-    /// validate that the response meets quality standards.
-    ///
-    /// Guardrails are executed after the LLM generates a response but before it's
-    /// returned in ``run(_:session:observer:)``.
-    ///
-    /// ## Adding Guardrails
-    /// Use the ``Builder/outputGuardrails(_:)`` or ``Builder/addOutputGuardrail(_:)`` methods.
-    ///
-    /// See ``OutputGuardrail`` for creating custom guardrails.
+    /// Guardrails that validate agent output before it returns to the caller.
+    /// See <doc:Guardrails>.
     public private(set) var outputGuardrails: [any OutputGuardrail]
 
-    /// The optional tracer for observability and debugging.
-    ///
-    /// When configured, the tracer receives events throughout the agent's execution,
-    /// including LLM calls, tool executions, and timing information. This enables
-    /// monitoring, debugging, and performance analysis.
-    ///
-    /// If not set but ``AgentConfiguration/defaultTracingEnabled`` is `true`,
-    /// a default ``SwiftLogTracer`` is automatically created.
-    ///
-    /// ## Setting a Tracer
-    /// Use ``init(_:configuration:memory:inferenceProvider:tracer:inputGuardrails:outputGuardrails:guardrailRunnerConfiguration:handoffs:tools:)``
-    /// or the ``Builder/tracer(_:)`` method.
-    ///
-    /// See ``Tracer`` for the protocol definition and available implementations.
+    /// Optional observability tracer. When `nil` and
+    /// ``AgentConfiguration/defaultTracingEnabled`` is `true`, a debug-level
+    /// `SwiftLogTracer` is used.
     public private(set) var tracer: (any Tracer)?
 
-    /// The configuration for the guardrail runner.
-    ///
-    /// This configuration controls how input and output guardrails are executed,
-    /// including timeout settings and error handling behavior.
-    ///
-    /// ## Default Behavior
-    /// If not specified, uses ``GuardrailRunnerConfiguration/default`` which runs
-    /// guardrails with a 30-second timeout and stops on the first failure.
-    ///
-    /// See ``GuardrailRunnerConfiguration`` for customization options.
+    /// Execution policy for the guardrail runner (sequential vs parallel,
+    /// stop-on-first-tripwire vs run-all).
     public private(set) var guardrailRunnerConfiguration: GuardrailRunnerConfiguration
 
-    /// The configured handoffs for multi-agent orchestration.
-    ///
-    /// Handoffs enable the agent to transfer control to other agents when appropriate.
-    /// Each handoff appears to the LLM as a callable tool, and when invoked,
-    /// execution transfers to the target agent.
-    ///
-    /// ## Multi-Agent Orchestration
-    /// Handoffs are the foundation of Swarm's multi-agent patterns. Use them to:
-    /// - Route requests to specialized agents
-    /// - Build hierarchical agent systems
-    /// - Implement agent teams with different expertise
-    ///
-    /// ## Adding Handoffs
-    /// ```swift
-    /// let agent = try Agent("Route requests to the right specialist.") {
-    ///     handoff(to: billingAgent)
-    ///     handoff(to: supportAgent)
-    /// }
-    /// ```
-    ///
-    /// See ``AnyHandoffConfiguration`` and ``HandoffOptions`` for more details.
+    /// Handoff configurations surfaced as tools to the model. Invoking one
+    /// transfers execution to the target agent. See <doc:WorkflowComposition>.
     public var handoffs: [AnyHandoffConfiguration] {
         _handoffs
     }
 
     // MARK: - Initialization
 
-    /// Creates a new Agent.
-    /// - Parameters:
-    ///   - tools: Tools available to the agent. Default: []
-    ///   - instructions: System instructions defining agent behavior. Default: ""
-    ///   - configuration: Agent configuration settings. Default: .default
-    ///   - memory: Optional explicit memory override. Default: composite ContextCore + Wax memory
-    ///   - inferenceProvider: Optional custom inference provider. Default: nil
-    ///   - tracer: Optional tracer for observability. Default: nil
-    ///   - inputGuardrails: Input validation guardrails. Default: []
-    ///   - outputGuardrails: Output validation guardrails. Default: []
-    ///   - guardrailRunnerConfiguration: Configuration for guardrail runner. Default: .default
-    ///   - handoffs: Handoff configurations for multi-agent orchestration. Default: []
-    /// - Throws: `ToolRegistryError.duplicateToolName` if duplicate tool names are provided.
+    /// Canonical init. Accepts already-type-erased ``AnyJSONTool`` values — use
+    /// this when you have dynamic tools, and prefer the typed-tool variant or
+    /// V3 `@ToolBuilder` form for most code.
+    /// - Throws: ``ToolRegistryError/duplicateToolName(name:)`` on name collision
     public init(
         tools: [any AnyJSONTool] = [],
         instructions: String = "",
@@ -263,12 +109,9 @@ public struct Agent: AgentRuntime, Sendable {
         toolRegistry = try ToolRegistry(tools: tools)
     }
 
-    /// Convenience initializer that takes an unlabeled inference provider.
-    ///
-    /// This enables an opinionated, easy setup:
-    /// ```swift
-    /// let agent = Agent(.anthropic(key: "..."))
-    /// ```
+    /// Convenience init with an unlabeled provider for the one-liner form:
+    /// `Agent(.anthropic(key: "..."))`.
+    /// - Throws: ``ToolRegistryError/duplicateToolName(name:)`` on name collision
     public init(
         _ inferenceProvider: any InferenceProvider,
         tools: [any AnyJSONTool] = [],
@@ -295,19 +138,9 @@ public struct Agent: AgentRuntime, Sendable {
         )
     }
 
-    /// Creates a new Agent with typed tools.
-    /// - Parameters:
-    ///   - tools: Typed tools available to the agent. Default: []
-    ///   - instructions: System instructions defining agent behavior. Default: ""
-    ///   - configuration: Agent configuration settings. Default: .default
-    ///   - memory: Optional explicit memory override. Default: composite ContextCore + Wax memory
-    ///   - inferenceProvider: Optional custom inference provider. Default: nil
-    ///   - tracer: Optional tracer for observability. Default: nil
-    ///   - inputGuardrails: Input validation guardrails. Default: []
-    ///   - outputGuardrails: Output validation guardrails. Default: []
-    ///   - guardrailRunnerConfiguration: Configuration for guardrail runner. Default: .default
-    ///   - handoffs: Handoff configurations for multi-agent orchestration. Default: []
-    /// - Throws: `ToolRegistryError.duplicateToolName` if duplicate tool names are provided.
+    /// Typed-tool init. Bridges each ``Tool`` through `AnyJSONToolAdapter` so
+    /// typed and dynamic tools coexist in the agent's registry.
+    /// - Throws: ``ToolRegistryError/duplicateToolName(name:)`` on name collision
     public init(
         tools: [some Tool] = [],
         instructions: String = "",
@@ -335,32 +168,12 @@ public struct Agent: AgentRuntime, Sendable {
         )
     }
 
-    /// Creates a new Agent with simplified handoff declaration.
-    ///
-    /// This convenience initializer accepts an array of `AgentRuntime` conforming agents
-    /// and automatically wraps each one as an `AnyHandoffConfiguration`, simplifying
-    /// multi-agent orchestration setup.
-    ///
-    /// Example:
-    /// ```swift
-    /// let triageAgent = Agent(
-    ///     instructions: "Route requests to the right specialist.",
-    ///     handoffAgents: [billingAgent, supportAgent, salesAgent]
-    /// )
-    /// ```
-    ///
-    /// - Parameters:
-    ///   - tools: Tools available to the agent. Default: []
-    ///   - instructions: System instructions defining agent behavior. Default: ""
-    ///   - configuration: Agent configuration settings. Default: .default
-    ///   - memory: Optional explicit memory override. Default: composite ContextCore + Wax memory
-    ///   - inferenceProvider: Optional custom inference provider. Default: nil
-    ///   - tracer: Optional tracer for observability. Default: nil
-    ///   - inputGuardrails: Input validation guardrails. Default: []
-    ///   - outputGuardrails: Output validation guardrails. Default: []
-    ///   - guardrailRunnerConfiguration: Configuration for guardrail runner. Default: .default
-    ///   - handoffAgents: Agents to hand off to, automatically wrapped as handoff configurations.
-    /// - Throws: `ToolRegistryError.duplicateToolName` if duplicate tool names are provided.
+    /// Convenience init that auto-wraps bare agents as handoff targets
+    /// (`AnyHandoffConfiguration`), saving the boilerplate when all you need
+    /// is the default tool naming.
+    /// - Parameter handoffAgents: each agent becomes a handoff target the
+    ///   model can invoke by name
+    /// - Throws: ``ToolRegistryError/duplicateToolName(name:)`` on name collision
     public init(
         tools: [any AnyJSONTool] = [],
         instructions: String = "",
@@ -396,28 +209,15 @@ public struct Agent: AgentRuntime, Sendable {
 
     // MARK: - V3 Canonical Init
 
-    /// V3 canonical initializer — instructions-first, `@ToolBuilder` trailing closure.
-    ///
-    /// This is the recommended path for creating agents in V3:
+    /// Instructions-first init with a `@ToolBuilder` trailing closure — the
+    /// recommended path for most new code:
     /// ```swift
     /// let agent = try Agent("You are a helpful assistant.") {
     ///     WeatherTool()
     ///     SearchTool()
     /// }
     /// ```
-    ///
-    /// - Parameters:
-    ///   - instructions: System instructions defining agent behavior.
-    ///   - configuration: Agent configuration settings. Default: `.default`
-    ///   - memory: Optional explicit memory override. Default: composite ContextCore + Wax memory
-    ///   - inferenceProvider: Optional custom inference provider. Default: `nil`
-    ///   - tracer: Optional tracer for observability. Default: `nil`
-    ///   - inputGuardrails: Input validation guardrails. Default: `[]`
-    ///   - outputGuardrails: Output validation guardrails. Default: `[]`
-    ///   - guardrailRunnerConfiguration: Configuration for guardrail runner. Default: `.default`
-    ///   - handoffs: Handoff configurations for multi-agent orchestration. Default: `[]`
-    ///   - tools: A `@ToolBuilder` closure producing the agent's tools. Default: empty.
-    /// - Throws: `ToolRegistryError.duplicateToolName` if duplicate tool names are provided.
+    /// - Throws: ``ToolRegistryError/duplicateToolName(name:)`` on name collision
     public init(
         _ instructions: String,
         configuration: AgentConfiguration = .default,
@@ -2120,13 +1920,12 @@ public struct Agent: AgentRuntime, Sendable {
 // MARK: Agent.Builder
 
 public extension Agent {
-    /// Builder for creating Agent instances with a fluent API.
+    /// Fluent `Agent` builder. Prefer a direct ``Agent`` initializer for most
+    /// code; reach for ``Builder`` when you want to compose the agent across
+    /// multiple scopes or with a lot of optional wiring.
     ///
-    /// Uses value semantics (struct) for Swift 6 concurrency safety.
-    ///
-    /// Example:
     /// ```swift
-    /// let agent = Agent.Builder()
+    /// let agent = try Agent.Builder()
     ///     .tools([WeatherTool(), CalculatorTool()])
     ///     .instructions("You are a helpful assistant.")
     ///     .configuration(.default.maxIterations(5))
@@ -2391,30 +2190,9 @@ public extension Agent {
 // MARK: - Convenience Initializers
 
 public extension Agent {
-    /// Creates a new Agent with a name as the first parameter.
-    ///
-    /// This convenience initializer mirrors the OpenAI Agent SDK pattern
-    /// where the agent name is a top-level parameter rather than nested
-    /// inside configuration.
-    ///
-    /// Example:
-    /// ```swift
-    /// let agent = Agent(name: "Triage", instructions: "Route requests", tools: [weatherTool])
-    /// ```
-    ///
-    /// - Parameters:
-    ///   - name: The display name of the agent.
-    ///   - instructions: System instructions defining agent behavior. Default: ""
-    ///   - tools: Tools available to the agent. Default: []
-    ///   - inferenceProvider: Optional custom inference provider. Default: nil
-    ///   - memory: Optional explicit memory override. Default: composite ContextCore + Wax memory
-    ///   - tracer: Optional tracer for observability. Default: nil
-    ///   - configuration: Additional agent configuration settings. Default: .default
-    ///   - inputGuardrails: Input validation guardrails. Default: []
-    ///   - outputGuardrails: Output validation guardrails. Default: []
-    ///   - guardrailRunnerConfiguration: Configuration for guardrail runner. Default: .default
-    ///   - handoffs: Handoff configurations for multi-agent orchestration. Default: []
-    /// - Throws: `ToolRegistryError.duplicateToolName` if duplicate tool names are provided.
+    /// Convenience init that takes the agent's display name as a top-level
+    /// parameter (merged into the `configuration.name`).
+    /// - Throws: ``ToolRegistryError/duplicateToolName(name:)`` on name collision
     init(
         name: String,
         instructions: String = "",
@@ -2449,34 +2227,10 @@ public extension Agent {
 // MARK: - Simplified Handoff Declaration
 
 public extension Agent {
-    /// Creates an Agent with agents directly as handoff targets.
-    ///
-    /// This convenience initializer eliminates the need to wrap each agent
-    /// in `AnyHandoffConfiguration`, inspired by the OpenAI SDK pattern
-    /// where you pass agents directly: `Agent(handoffs=[billing, support])`.
-    ///
-    /// Example:
-    /// ```swift
-    /// let triage = Agent(
-    ///     name: "Triage",
-    ///     instructions: "Route requests",
-    ///     handoffAgents: [billingAgent, supportAgent]
-    /// )
-    /// ```
-    ///
-    /// - Parameters:
-    ///   - name: The display name of the agent.
-    ///   - instructions: System instructions. Default: ""
-    ///   - tools: Tools available to the agent. Default: []
-    ///   - inferenceProvider: Optional inference provider. Default: nil
-    ///   - memory: Optional explicit memory override. Default: composite ContextCore + Wax memory
-    ///   - tracer: Optional tracer. Default: nil
-    ///   - configuration: Additional configuration. Default: .default
-    ///   - inputGuardrails: Input guardrails. Default: []
-    ///   - outputGuardrails: Output guardrails. Default: []
-    ///   - guardrailRunnerConfiguration: Guardrail runner config. Default: .default
-    ///   - handoffAgents: Agents to use as handoff targets.
-    /// - Throws: `ToolRegistryError.duplicateToolName` if duplicate tool names are provided.
+    /// Convenience init combining a named agent with bare-agent handoff
+    /// targets. Each element of `handoffAgents` is wrapped in a default
+    /// ``AnyHandoffConfiguration``.
+    /// - Throws: ``ToolRegistryError/duplicateToolName(name:)`` on name collision
     init(
         name: String,
         instructions: String = "",
@@ -2512,20 +2266,14 @@ public extension Agent {
 // MARK: - V3 Canonical Init with Explicit Provider
 
 public extension Agent {
-    /// V3 convenience init with an explicit, non-optional inference provider.
-    ///
-    /// This overload avoids the optional wrapping when a provider is always known:
+    /// V3 init with a non-optional, labeled provider — skip the optional
+    /// wrapping when the provider is always known at the call site.
     /// ```swift
     /// let agent = try Agent("You are helpful.", provider: .anthropic(key: apiKey)) {
     ///     WeatherTool()
     /// }
     /// ```
-    ///
-    /// - Parameters:
-    ///   - instructions: System instructions defining agent behavior.
-    ///   - provider: The inference provider to use.
-    ///   - tools: A `@ToolBuilder` closure producing the agent's tools. Default: empty.
-    /// - Throws: `ToolRegistryError.duplicateToolName` if duplicate tool names are provided.
+    /// - Throws: ``ToolRegistryError/duplicateToolName(name:)`` on name collision
     init(
         _ instructions: String,
         provider: some InferenceProvider,

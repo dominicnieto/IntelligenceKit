@@ -32,7 +32,15 @@ Foundation Models, MLX).
 
 ### Memory and Sessions
 - ``Memory``
+- ``ConversationMemory``
+- ``SlidingWindowMemory``
+- ``SummaryMemory``
+- ``HybridMemory``
+- ``PersistentMemory``
+- ``VectorMemory``
+- ``MemoryMessage``
 - ``Session``
+- <doc:MemoryAndSessions>
 
 ### Guardrails
 - ``InputGuardrail``

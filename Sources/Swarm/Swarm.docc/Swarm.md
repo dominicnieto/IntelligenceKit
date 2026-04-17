@@ -59,5 +59,10 @@ Foundation Models, MLX).
 - ``WorkflowError``
 - <doc:ErrorHandling>
 
+### Streaming
+- ``MergeErrorStrategy``
+- ``AgentEventStream``
+- <doc:Streaming>
+
 ### Configuration
 - ``Swarm``

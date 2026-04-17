@@ -45,7 +45,13 @@ Foundation Models, MLX).
 ### Guardrails
 - ``InputGuardrail``
 - ``OutputGuardrail``
+- ``InputGuard``
+- ``OutputGuard``
+- ``InputValidationHandler``
+- ``OutputValidationHandler``
+- ``GuardrailResult``
 - ``GuardrailRunner``
+- <doc:Guardrails>
 
 ### Errors
 - ``AgentError``

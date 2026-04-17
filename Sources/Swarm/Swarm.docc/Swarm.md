@@ -18,6 +18,8 @@ Foundation Models, MLX).
 
 ### Workflows
 - ``Workflow``
+- ``Workflow/MergeStrategy``
+- <doc:WorkflowComposition>
 
 ### Tools
 - ``Tool``

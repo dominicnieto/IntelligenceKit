@@ -99,12 +99,16 @@ actor StreamTextActor {
 
     func textStream() async -> AsyncThrowingStream<String, Error> {
         await ensureStarted()
-        return await textBroadcaster.register()
+        let stream = await textBroadcaster.register()
+        await textBroadcaster.sealReplay()
+        return stream
     }
 
     func fullStream() async -> AsyncThrowingStream<TextStreamPart, Error> {
         await ensureStarted()
-        return await fullBroadcaster.register()
+        let stream = await fullBroadcaster.register()
+        await fullBroadcaster.sealReplay()
+        return stream
     }
 
     // External request to stop the current and subsequent provider streams.

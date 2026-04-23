@@ -9,6 +9,31 @@ import AISDKProvider
 import AISDKProviderUtils
 #if canImport(FoundationNetworking)
 import FoundationNetworking
+
+private final class DownloadCancellationState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var task: URLSessionDataTask?
+    private var cancelled = false
+
+    func setTask(_ newTask: URLSessionDataTask) {
+        lock.lock()
+        defer { lock.unlock() }
+
+        if cancelled {
+            newTask.cancel()
+        } else {
+            task = newTask
+        }
+    }
+
+    func cancelTask() {
+        lock.lock()
+        defer { lock.unlock() }
+
+        cancelled = true
+        task?.cancel()
+    }
+}
 #endif
 
 /// Downloads a file from the specified URL.
@@ -38,19 +63,25 @@ public func download(url: URL) async throws -> (data: Data, mediaType: String?) 
 
         #if canImport(FoundationNetworking)
         // Linux: use async wrapper for URLSession
-        data = try await withCheckedThrowingContinuation { continuation in
-            let task = URLSession.shared.dataTask(with: request) { data, response, error in
-                if let error = error {
-                    continuation.resume(throwing: error)
-                    return
+        let cancellationState = DownloadCancellationState()
+        (data, response) = try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let task = URLSession.shared.dataTask(with: request) { data, response, error in
+                    if let error = error {
+                        continuation.resume(throwing: error)
+                        return
+                    }
+                    guard let data, let response else {
+                        continuation.resume(throwing: URLError(.badServerResponse))
+                        return
+                    }
+                    continuation.resume(returning: (data, response))
                 }
-                guard let data = data, let response = response else {
-                    continuation.resume(throwing: URLError(.badServerResponse))
-                    return
-                }
-                continuation.resume(returning: (data, response))
+                cancellationState.setTask(task)
+                task.resume()
             }
-            task.resume()
+        } onCancel: {
+            cancellationState.cancelTask()
         }
         #else
         // macOS/iOS: use native async/await

@@ -105,16 +105,6 @@ func registerAllExamples() {
     TranscribeOpenAIStringExample.self, path: TranscribeOpenAIStringExample.name)
   ExampleCatalog.register(
     TranscribeOpenAIVerboseExample.self, path: TranscribeOpenAIVerboseExample.name)
-  ExampleCatalog.register(TranscribeDeepgramExample.self, path: TranscribeDeepgramExample.name)
-  ExampleCatalog.register(
-    TranscribeDeepgramURLExample.self, path: TranscribeDeepgramURLExample.name)
-  ExampleCatalog.register(
-    TranscribeDeepgramStringExample.self, path: TranscribeDeepgramStringExample.name)
-  ExampleCatalog.register(TranscribeAssemblyAIExample.self, path: TranscribeAssemblyAIExample.name)
-  ExampleCatalog.register(
-    TranscribeAssemblyAIURLExample.self, path: TranscribeAssemblyAIURLExample.name)
-  ExampleCatalog.register(
-    TranscribeAssemblyAIStringExample.self, path: TranscribeAssemblyAIStringExample.name)
   // Embed
   ExampleCatalog.register(EmbedOpenAIExample.self, path: EmbedOpenAIExample.name)
   ExampleCatalog.register(EmbedManyOpenAIExample.self, path: EmbedManyOpenAIExample.name)

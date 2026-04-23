@@ -10,48 +10,21 @@ The AI SDK comes with several providers that you can use to interact with differ
 
 ## Swift provider modules
 
-The Swift AI SDK ships with **37 provider modules** (one SwiftPM product per provider). Documentation pages are still being ported for some providers.
+The Swift AI SDK ships with **11 provider modules** (one SwiftPM product per provider).
 
 | Provider | SwiftPM product | Docs |
 | --- | --- | --- |
 | OpenAI | `OpenAIProvider` | [OpenAI](/providers/openai) |
-| Open Responses | `OpenResponsesProvider` | [Open Responses](/providers/open-responses) |
-| ByteDance | `ByteDanceProvider` | [ByteDance](/providers/bytedance) |
-| Alibaba | `AlibabaProvider` | [Alibaba](/providers/alibaba) |
-| Kling AI | `KlingAIProvider` | [Kling AI](/providers/klingai) |
 | Anthropic | `AnthropicProvider` | [Anthropic](/providers/anthropic) |
 | Google Generative AI | `GoogleProvider` | [Google Generative AI](/providers/google-generative-ai) |
 | Google Vertex AI | `GoogleVertexProvider` | — |
-| Azure | `AzureProvider` | — |
-| Amazon Bedrock | `AmazonBedrockProvider` | — |
 | Vercel | `VercelProvider` | [Vercel](/providers/vercel) |
-| TogetherAI | `TogetherAIProvider` | [Together.ai](/providers/togetherai) |
 | Mistral | `MistralProvider` | [Mistral](/providers/mistral) |
-| Groq | `GroqProvider` | — |
 | xAI | `XAIProvider` | — |
-| Moonshot AI | `MoonshotAIProvider` | [Moonshot AI](/providers/moonshotai) |
-| Cohere | `CohereProvider` | [Cohere](/providers/cohere) |
 | Perplexity | `PerplexityProvider` | [Perplexity](/providers/perplexity) |
-| DeepSeek | `DeepSeekProvider` | — |
-| DeepInfra | `DeepInfraProvider` | — |
-| Cerebras | `CerebrasProvider` | — |
-| Baseten | `BasetenProvider` | — |
-| HuggingFace | `HuggingFaceProvider` | — |
 | Gateway | `GatewayProvider` | — |
 | OpenAI Compatible | `OpenAICompatibleProvider` | — |
-| Replicate | `ReplicateProvider` | [Replicate](/providers/replicate) |
-| Black Forest Labs | `BlackForestLabsProvider` | [Black Forest Labs](/providers/black-forest-labs) |
-| Prodia | `ProdiaProvider` | [Prodia](/providers/prodia) |
-| Fal | `FalProvider` | [Fal](/providers/fal) |
-| Fireworks | `FireworksProvider` | — |
-| Luma | `LumaProvider` | — |
-| LMNT | `LMNTProvider` | [LMNT](/providers/lmnt) |
 | ElevenLabs | `ElevenLabsProvider` | — |
-| Deepgram | `DeepgramProvider` | — |
-| AssemblyAI | `AssemblyAIProvider` | — |
-| Gladia | `GladiaProvider` | — |
-| RevAI | `RevAIProvider` | [Rev.ai](/providers/revai) |
-| Hume | `HumeProvider` | — |
 
 ## Provider support
 
@@ -60,40 +33,13 @@ Not all providers support all AI SDK features. Here's a quick comparison of the 
 | Provider | Image Input | Object Generation | Tool Usage | Tool Streaming |
 | ------------------------------------------------------------------------ | ------------------- | ------------------- | ------------------- | ------------------- |
 | [OpenAI](/providers/openai) | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> |
-| [Open Responses](/providers/open-responses) | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> |
-| [Alibaba](/providers/alibaba) | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> |
 | [Anthropic](/providers/anthropic) | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> |
 | [Google Generative AI](/providers/google-generative-ai) | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> |
+| Google Vertex AI | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> |
 | [Vercel](/providers/vercel) | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> |
 | [Mistral](/providers/mistral) | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> |
-| [Cohere](/providers/cohere) | <Cross size={18} /> | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> |
-| [Perplexity](/providers/perplexity) | <Check size={18} /> | <Check size={18} /> | <Cross size={18} /> | <Cross size={18} /> |
-| Groq | <Cross size={18} /> | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> |
 | xAI | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> |
-| [Moonshot AI](/providers/moonshotai) | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> |
-| Azure | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> |
-| Cerebras | <Cross size={18} /> | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> |
-| DeepSeek | <Cross size={18} /> | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> |
-| DeepInfra | <Cross size={18} /> | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> |
+| [Perplexity](/providers/perplexity) | <Check size={18} /> | <Check size={18} /> | <Cross size={18} /> | <Cross size={18} /> |
 | OpenAI Compatible | <Cross size={18} /> | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> |
-| [Together.ai](/providers/togetherai) | <Cross size={18} /> | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> |
-| [Replicate](/providers/replicate) | <Check size={18} /> | <Cross size={18} /> | <Cross size={18} /> | <Cross size={18} /> |
-| Baseten | <Cross size={18} /> | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> |
-| [LMNT](/providers/lmnt) | <Cross size={18} /> | <Cross size={18} /> | <Cross size={18} /> | <Cross size={18} /> |
 | ElevenLabs | <Cross size={18} /> | <Cross size={18} /> | <Cross size={18} /> | <Cross size={18} /> |
-| Deepgram | <Cross size={18} /> | <Cross size={18} /> | <Cross size={18} /> | <Cross size={18} /> |
-| AssemblyAI | <Cross size={18} /> | <Cross size={18} /> | <Cross size={18} /> | <Cross size={18} /> |
-| [Fal](/providers/fal) | <Cross size={18} /> | <Cross size={18} /> | <Cross size={18} /> | <Cross size={18} /> |
-| [ByteDance](/providers/bytedance) | <Cross size={18} /> | <Cross size={18} /> | <Cross size={18} /> | <Cross size={18} /> |
-| [Kling AI](/providers/klingai) | <Cross size={18} /> | <Cross size={18} /> | <Cross size={18} /> | <Cross size={18} /> |
-| Fireworks | <Cross size={18} /> | <Cross size={18} /> | <Cross size={18} /> | <Cross size={18} /> |
-| [Black Forest Labs](/providers/black-forest-labs) | <Cross size={18} /> | <Cross size={18} /> | <Cross size={18} /> | <Cross size={18} /> |
-| [Prodia](/providers/prodia) | <Cross size={18} /> | <Cross size={18} /> | <Cross size={18} /> | <Cross size={18} /> |
-| Luma | <Cross size={18} /> | <Cross size={18} /> | <Cross size={18} /> | <Cross size={18} /> |
-| Gladia | <Cross size={18} /> | <Cross size={18} /> | <Cross size={18} /> | <Cross size={18} /> |
-| [Rev.ai](/providers/revai) | <Cross size={18} /> | <Cross size={18} /> | <Cross size={18} /> | <Cross size={18} /> |
-| Hume | <Cross size={18} /> | <Cross size={18} /> | <Cross size={18} /> | <Cross size={18} /> |
-| HuggingFace | <Cross size={18} /> | <Check size={18} /> | <Cross size={18} /> | <Cross size={18} /> |
-| Google Vertex AI | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> |
-| Amazon Bedrock | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> | <Check size={18} /> |
 | Gateway | <Check size={18} /> | <Check size={18} /> | <Cross size={18} /> | <Cross size={18} /> |

@@ -52,6 +52,7 @@ Status legend:
 ## Lower-impact findings
 
 ### [ ] 6. `@unchecked Sendable` cleanup / invariant tightening
+- Detailed audit: `todo/unchecked-sendable-audit.md`
 - Files:
   - `Sources/SwiftAISDK/Streams/AsyncIterableStream.swift`
   - `Sources/SwiftAISDK/...` `AnySendableError`
@@ -61,7 +62,7 @@ Status legend:
 - Outcome:
   - the `EventSourceParser` part of this item was resolved by removing that module entirely
   - remaining `@unchecked Sendable` review still applies elsewhere, but the SSE parser-specific concern is gone
-
+  
 ### [ ] 7. Structured vs unstructured task cleanup
 - Problem: several places still use `Task { ... }` as an isolation hop / background follow-up where structured concurrency may be clearer and safer.
 - Note: this overlaps with item 5 and should be tackled opportunistically when touching those call sites.

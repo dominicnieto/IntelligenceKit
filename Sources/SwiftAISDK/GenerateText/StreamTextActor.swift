@@ -15,7 +15,7 @@ actor StreamTextActor {
     private let textBroadcaster = AsyncStreamBroadcaster<String>()
     private let fullBroadcaster = AsyncStreamBroadcaster<TextStreamPart>()
 
-    private var started = false
+    private var runStarted = false
     // Session-level framing: `.start` must be emitted exactly once per session
     private var framingEmitted = false
     private var terminated = false
@@ -58,8 +58,51 @@ actor StreamTextActor {
         let providerMetadata: ProviderMetadata?
     }
 
+    private actor ToolExecutionCoordinator {
+        private var continuation: AsyncStream<PendingApproval>.Continuation?
+        private let task: Task<Void, Never>
+
+        init(execute: @escaping @Sendable (PendingApproval) async -> Void) {
+            let (stream, continuation) = AsyncStream.makeStream(of: PendingApproval.self)
+            self.continuation = continuation
+            self.task = Task {
+                await withTaskGroup(of: Void.self) { group in
+                    for await pending in stream {
+                        group.addTask {
+                            await execute(pending)
+                        }
+                    }
+                    await group.waitForAll()
+                }
+            }
+        }
+
+        func submit(_ pending: PendingApproval) {
+            continuation?.yield(pending)
+        }
+
+        func cancel() {
+            task.cancel()
+            finishStream()
+        }
+
+        func finish(cancelOutstanding: Bool = false) async {
+            finishStream()
+            if cancelOutstanding {
+                task.cancel()
+            }
+            await task.value
+        }
+
+        private func finishStream() {
+            continuation?.finish()
+            continuation = nil
+        }
+    }
+
     private var pendingApprovals: [PendingApproval] = []
-    private var inFlightToolTasks: [String: Task<Void, Never>] = [:]
+    private let mergedAbortSignal: (@Sendable () -> Bool)?
+    private var activeToolCoordinator: ToolExecutionCoordinator?
 
     private let totalUsagePromise: DelayedPromise<LanguageModelUsage>
     private let finishReasonPromise: DelayedPromise<FinishReason>
@@ -88,6 +131,7 @@ actor StreamTextActor {
         self.configuration = configuration
         self.approvalResolver = approvalResolver
         self.experimentalContext = experimentalApprovalContext
+        self.mergedAbortSignal = configuration.abortSignal
         self.totalUsagePromise = totalUsagePromise
         self.finishReasonPromise = finishReasonPromise
         self.stepsPromise = stepsPromise
@@ -98,14 +142,12 @@ actor StreamTextActor {
     }
 
     func textStream() async -> AsyncThrowingStream<String, Error> {
-        await ensureStarted()
         let stream = await textBroadcaster.register()
         await textBroadcaster.sealReplay()
         return stream
     }
 
     func fullStream() async -> AsyncThrowingStream<TextStreamPart, Error> {
-        await ensureStarted()
         let stream = await fullBroadcaster.register()
         await fullBroadcaster.sealReplay()
         return stream
@@ -115,11 +157,8 @@ actor StreamTextActor {
     // This mirrors the upstream `stopStream` hook used by transforms.
     func requestStop() async {
         externalStopRequested = true
-
-        // Cancel all in-flight tool tasks so cancellation propagates into
-        // tool execute closures (e.g. via withTaskCancellationHandler)
-        for (_, task) in inFlightToolTasks {
-            task.cancel()
+        if let activeToolCoordinator {
+            await activeToolCoordinator.cancel()
         }
 
         // Emit `.abort` immediately to notify consumers, but keep streams open
@@ -134,13 +173,10 @@ actor StreamTextActor {
         await fullBroadcaster.send(.error(StreamTextInvariantError(message: message)))
     }
 
-    private func ensureStarted() async {
-        guard !started else { return }
-        started = true
-        Task { [weak self] in await self?.run() }
-    }
+    func runIfNeeded() async {
+        guard !runStarted else { return }
+        runStarted = true
 
-    private func run() async {
         do {
             try await consumeProviderStream(stream: source, emitStartStep: true)
             while !terminated {
@@ -563,7 +599,7 @@ actor StreamTextActor {
         }
     }
 
-    private func resolvePendingApprovals() async {
+    private func resolvePendingApprovals(using coordinator: ToolExecutionCoordinator?) async {
         if pendingApprovals.isEmpty { return }
         let approvals = pendingApprovals
         pendingApprovals.removeAll()
@@ -575,9 +611,8 @@ actor StreamTextActor {
                 if Task.isCancelled { break }
                 switch decision {
                 case .approve:
-                    // Execute concurrently so multiple approved tools run in parallel
-                    inFlightToolTasks[pending.toolCallId] = Task { [weak self] in
-                        await self?.executeToolAfterApproval(pending)
+                    if let coordinator {
+                        await coordinator.submit(pending)
                     }
                 case .deny:
                     await emitToolOutputDenied(callId: pending.toolCallId, toolName: pending.toolName)
@@ -599,7 +634,7 @@ actor StreamTextActor {
         let options = ToolCallOptions(
             toolCallId: pending.toolCallId,
             messages: currentMessagesForApproval(),
-            abortSignal: nil,
+            abortSignal: mergedAbortSignal,
             experimentalContext: experimentalContext
         )
         do {
@@ -641,6 +676,11 @@ actor StreamTextActor {
         stream: AsyncThrowingStream<LanguageModelV3StreamPart, Error>,
         emitStartStep: Bool
     ) async throws {
+        let toolCoordinator = ToolExecutionCoordinator { [weak self] pending in
+            await self?.executeToolAfterApproval(pending)
+        }
+        activeToolCoordinator = toolCoordinator
+
         // Reset per-step state
         recordedContent.removeAll()
         activeTextContent.removeAll()
@@ -653,7 +693,6 @@ actor StreamTextActor {
         openReasoningIds.removeAll()
         activeToolInputs.removeAll()
         activeToolNames.removeAll()
-        inFlightToolTasks.removeAll()
         capturedResponseId = configuration.generateId()
         capturedModelId = model.modelId
         capturedTimestamp = configuration.currentDate()
@@ -951,7 +990,7 @@ case let .toolInputStart(id, toolName, providerMetadata, providerExecuted, dynam
                     let options = ToolCallOptions(
                         toolCallId: id,
                         messages: messagesForInput,
-                        abortSignal: configuration.abortSignal,
+                        abortSignal: mergedAbortSignal,
                         experimentalContext: experimentalContext
                     )
                     try await onInputStart(options)
@@ -991,7 +1030,7 @@ case let .toolInputStart(id, toolName, providerMetadata, providerExecuted, dynam
                         inputTextDelta: delta,
                         toolCallId: id,
                         messages: currentMessagesForApproval(),
-                        abortSignal: configuration.abortSignal,
+                        abortSignal: mergedAbortSignal,
                         experimentalContext: experimentalContext
                     )
                     try await onInputDelta(options)
@@ -1053,7 +1092,7 @@ case let .toolInputStart(id, toolName, providerMetadata, providerExecuted, dynam
                         input: typed.input,
                         toolCallId: typed.toolCallId,
                         messages: approvalMessages,
-                        abortSignal: configuration.abortSignal,
+                        abortSignal: mergedAbortSignal,
                         experimentalContext: experimentalContext
                     )
                     do {
@@ -1090,10 +1129,7 @@ case let .toolInputStart(id, toolName, providerMetadata, providerExecuted, dynam
                         tool: tool,
                         providerMetadata: typed.providerMetadata
                     )
-                    // Execute concurrently so the stream loop can continue reading subsequent tool calls
-                    inFlightToolTasks[typed.toolCallId] = Task { [weak self] in
-                        await self?.executeToolAfterApproval(pending)
-                    }
+                    await toolCoordinator.submit(pending)
                 }
 
             case .toolApprovalRequest(let request):
@@ -1191,14 +1227,9 @@ case let .toolInputStart(id, toolName, providerMetadata, providerExecuted, dynam
                 }
                 openReasoningIds.removeAll()
                 finalizePendingContent()
-                await resolvePendingApprovals()
-
-                // Wait for all concurrently-executing tool handlers to complete before finalizing the step.
-                // This includes tasks spawned in the stream loop and by resolvePendingApprovals
-                for (_, task) in inFlightToolTasks {
-                    await task.value
-                }
-                inFlightToolTasks.removeAll()
+                await resolvePendingApprovals(using: toolCoordinator)
+                await toolCoordinator.finish(cancelOutstanding: externalStopRequested || Task.isCancelled)
+                activeToolCoordinator = nil
 
                 let response = LanguageModelResponseMetadata(
                     id: capturedResponseId ?? configuration.generateId(),
@@ -1318,7 +1349,11 @@ case let .toolInputStart(id, toolName, providerMetadata, providerExecuted, dynam
         // If the provider supplied a tail step via `response/usage/finishReason`,
         // record it before resolving the promises or emitting the terminal `.finish`.
         finalizePendingContent()
-        await resolvePendingApprovals()
+        await resolvePendingApprovals(using: activeToolCoordinator)
+        if let activeToolCoordinator {
+            await activeToolCoordinator.finish(cancelOutstanding: aborted || error != nil || externalStopRequested)
+            self.activeToolCoordinator = nil
+        }
         if let usage, let finishReason, let resp = response {
             let contentSnapshot = recordedContent
             let modelMessages = toResponseMessages(content: contentSnapshot, tools: tools)
@@ -1477,7 +1512,7 @@ case let .toolInputStart(id, toolName, providerMetadata, providerExecuted, dynam
             tools: tools,
             toolChoice: toolChoice,
             includeRawChunks: configuration.includeRawChunks ? true : nil,
-            abortSignal: configuration.abortSignal,
+            abortSignal: mergedAbortSignal,
             headers: configuration.headers,
             providerOptions: providerOptions ?? configuration.providerOptions
         )

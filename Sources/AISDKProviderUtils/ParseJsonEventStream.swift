@@ -1,5 +1,4 @@
 import Foundation
-import EventSourceParser
 
 /**
  Parses a JSON event stream (Server-Sent Events) into a stream of parsed JSON objects.
@@ -8,7 +7,7 @@ import EventSourceParser
 
  This function:
  1. Decodes bytes to UTF-8 text
- 2. Parses SSE events using EventSourceParser
+ 2. Parses SSE events using EventSource
  3. Ignores the `[DONE]` marker (OpenAI convention)
  4. Parses event data as JSON using the provided schema
  */
@@ -19,11 +18,7 @@ public func parseJsonEventStream<T>(
     AsyncThrowingStream { continuation in
         Task {
             do {
-                // Use EventSourceParserStream to convert byte stream to SSE events
-                let eventStream = EventSourceParserStream.makeStream(
-                    from: stream,
-                    options: EventSourceParserStreamOptions(onError: .ignore)
-                )
+                let eventStream = makeServerSentEventStream(from: stream)
 
                 // Transform each event into a ParseJSONResult
                 for try await event in eventStream {

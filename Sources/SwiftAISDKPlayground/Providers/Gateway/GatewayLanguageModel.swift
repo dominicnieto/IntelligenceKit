@@ -1,7 +1,6 @@
 import Foundation
 import AISDKProvider
 import AISDKProviderUtils
-import EventSourceParser
 
 /// Minimal Swift port of Vercel AI Gateway language model for CLI usage.
 /// Supports basic text generation and streaming for manual testing purposes.
@@ -133,10 +132,23 @@ final class GatewayLanguageModel: LanguageModelV3 {
 
         let dataStream = AsyncThrowingStream<Data, Error> { continuation in
             Task.detached {
+                var buffer = Data()
+                buffer.reserveCapacity(16_384)
+
                 do {
                     for try await byte in byteStream {
-                        continuation.yield(Data([byte]))
+                        buffer.append(byte)
+
+                        if buffer.count >= 1024 || byte == UInt8(ascii: "\n") {
+                            continuation.yield(buffer)
+                            buffer.removeAll(keepingCapacity: true)
+                        }
                     }
+
+                    if !buffer.isEmpty {
+                        continuation.yield(buffer)
+                    }
+
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
@@ -144,10 +156,7 @@ final class GatewayLanguageModel: LanguageModelV3 {
             }
         }
 
-        let eventStream = EventSourceParserStream.makeStream(
-            from: dataStream,
-            options: .init(onError: .ignore)
-        )
+        let eventStream = makeServerSentEventStream(from: dataStream)
 
         let partStream = AsyncThrowingStream<LanguageModelV3StreamPart, Error> { continuation in
             Task.detached {

@@ -11,7 +11,6 @@
 import Foundation
 import AISDKProvider
 import AISDKProviderUtils
-import EventSourceParser
 
 // MARK: - URL Extensions
 
@@ -357,7 +356,7 @@ public final class SseMCPTransport: MCPTransport, @unchecked Sendable {
                     }
 
                     // Parse SSE stream
-                    let eventStream = EventSourceParserStream.makeStream(from: dataStream)
+                    let eventStream = makeServerSentEventStream(from: dataStream)
 
                     // Process events
                     for try await event in eventStream {

@@ -8,7 +8,6 @@
 import Foundation
 import AISDKProvider
 import AISDKProviderUtils
-import EventSourceParser
 
 @available(macOS 12.0, iOS 15.0, watchOS 8.0, tvOS 15.0, *)
 public final class HttpMCPTransport: MCPTransport, @unchecked Sendable {
@@ -378,7 +377,7 @@ public final class HttpMCPTransport: MCPTransport, @unchecked Sendable {
 
     private func processEventStreamBytes(_ bytes: URLSession.AsyncBytes) async {
         let stream = dataStream(from: bytes)
-        let eventStream = EventSourceParserStream.makeStream(from: stream)
+        let eventStream = makeServerSentEventStream(from: stream)
 
         do {
             for try await event in eventStream {
@@ -518,7 +517,7 @@ public final class HttpMCPTransport: MCPTransport, @unchecked Sendable {
                 _inboundSseConnectionActive = true
             }
 
-            let eventStream = EventSourceParserStream.makeStream(from: dataStream(from: bytes))
+            let eventStream = makeServerSentEventStream(from: dataStream(from: bytes))
 
             stateLock.withLock {
                 _inboundReconnectAttempts = 0

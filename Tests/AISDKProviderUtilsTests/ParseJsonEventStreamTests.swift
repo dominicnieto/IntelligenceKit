@@ -1,6 +1,5 @@
 import Foundation
 import Testing
-import EventSourceParser
 @testable import AISDKProvider
 @testable import AISDKProviderUtils
 
@@ -244,6 +243,30 @@ struct ParseJsonEventStreamTests {
             #expect(payload.a == 100)
         } else {
             Issue.record("Expected success for custom event type")
+        }
+    }
+
+    @Test("ignores unknown SSE fields and continues parsing")
+    func ignoresUnknownSSEFields() async throws {
+        let stream = makeSSEStream(events: [
+            "foo: bar\n",
+            "\n",
+            "data: {\"a\":7}\n\n"
+        ])
+
+        let resultStream = parseJsonEventStream(
+            stream: stream,
+            schema: makeSchema()
+        )
+
+        let results = try await collectResults(resultStream)
+
+        #expect(results.count == 1)
+
+        if case .success(let payload, _) = results[0] {
+            #expect(payload.a == 7)
+        } else {
+            Issue.record("Expected success after unknown SSE field")
         }
     }
 

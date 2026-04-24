@@ -1,9 +1,9 @@
 /**
  Mock MCP transport for testing.
- 
+
  Port of `packages/mcp/src/tool/mock-mcp-transport.ts`.
  Upstream commit: f3a72bc2a
- 
+
  This transport simulates an MCP server for testing purposes without requiring
  a real MCP server connection.
  */
@@ -86,7 +86,7 @@ private let defaultResourceContents: [ResourceContents] = [
     )
 ]
 
-public final class MockMCPTransport: MCPTransport, @unchecked Sendable {
+public actor MockMCPTransport: MCPTransport {
     private let tools: [MCPTool]
     private let resources: [MCPResource]
     private let resourceTemplates: [ResourceTemplate]
@@ -98,16 +98,8 @@ public final class MockMCPTransport: MCPTransport, @unchecked Sendable {
     private let sendError: Bool
     private let toolCallResults: [String: CallToolResult]
 
-    private let sentMessagesLock = NSLock()
-    private var _sentMessages: [JSONRPCMessage] = []
-
-    public var onmessage: (@Sendable (JSONRPCMessage) -> Void)?
-    public var onclose: (@Sendable () -> Void)?
-    public var onerror: (@Sendable (Error) -> Void)?
-
-    public var sentMessages: [JSONRPCMessage] {
-        sentMessagesLock.withLock { _sentMessages }
-    }
+    private var sentMessages: [JSONRPCMessage] = []
+    private var eventHandler: MCPTransportEventHandler?
 
     public init(
         overrideTools: [MCPTool]? = nil,
@@ -133,44 +125,61 @@ public final class MockMCPTransport: MCPTransport, @unchecked Sendable {
         self.toolCallResults = toolCallResults
     }
 
+    public func setEventHandler(_ handler: MCPTransportEventHandler?) async {
+        eventHandler = handler
+    }
+
     public func start() async throws {
         if sendError {
-            onerror?(
+            await emit(.error(MCPTransportEventError(
                 NSError(
                     domain: "UnknownError",
                     code: -1,
                     userInfo: [NSLocalizedDescriptionKey: "Unknown error"]
                 )
-            )
+            )))
         }
     }
 
     public func send(message: JSONRPCMessage) async throws {
-        sentMessagesLock.withLock { _sentMessages.append(message) }
+        sentMessages.append(message)
         if case .request(let request) = message {
             try await handleRequest(request)
         }
     }
 
     public func close() async throws {
-        onclose?()
+        await emit(.close)
+    }
+
+    public func sentMessagesSnapshot() -> [JSONRPCMessage] {
+        sentMessages
+    }
+
+    public func injectServerMessage(_ message: JSONRPCMessage) async {
+        await emit(.message(message))
     }
 
     // MARK: - Private
+
+    private func emit(_ event: MCPTransportEvent) async {
+        guard let eventHandler else { return }
+        await eventHandler(event)
+    }
 
     private func handleRequest(_ request: JSONRPCRequest) async throws {
         switch request.method {
         case "initialize":
             try await delay(10)
             let result = initializeResult ?? defaultInitializeResult()
-            onmessage?(.response(JSONRPCResponse(id: request.id, result: result)))
+            await emit(.message(.response(JSONRPCResponse(id: request.id, result: result))))
 
         case "resources/list":
             try await delay(10)
             let result = try encodeToJSONValue(
                 ListResourcesResult(resources: resources)
             )
-            onmessage?(.response(JSONRPCResponse(id: request.id, result: result)))
+            await emit(.message(.response(JSONRPCResponse(id: request.id, result: result))))
 
         case "resources/read":
             try await delay(10)
@@ -181,14 +190,14 @@ public final class MockMCPTransport: MCPTransport, @unchecked Sendable {
             let result = try encodeToJSONValue(
                 ListResourceTemplatesResult(resourceTemplates: resourceTemplates)
             )
-            onmessage?(.response(JSONRPCResponse(id: request.id, result: result)))
+            await emit(.message(.response(JSONRPCResponse(id: request.id, result: result))))
 
         case "prompts/list":
             try await delay(10)
             let result = try encodeToJSONValue(
                 ListPromptsResult(prompts: prompts)
             )
-            onmessage?(.response(JSONRPCResponse(id: request.id, result: result)))
+            await emit(.message(.response(JSONRPCResponse(id: request.id, result: result))))
 
         case "prompts/get":
             try await delay(10)
@@ -197,11 +206,13 @@ public final class MockMCPTransport: MCPTransport, @unchecked Sendable {
         case "tools/list":
             try await delay(10)
             if tools.isEmpty {
-                onmessage?(
-                    .error(
-                        JSONRPCError(
-                            id: request.id,
-                            error: JSONRPCErrorObject(code: -32000, message: "Method not supported")
+                await emit(
+                    .message(
+                        .error(
+                            JSONRPCError(
+                                id: request.id,
+                                error: JSONRPCErrorObject(code: -32000, message: "Method not supported")
+                            )
                         )
                     )
                 )
@@ -211,7 +222,7 @@ public final class MockMCPTransport: MCPTransport, @unchecked Sendable {
             let result = try encodeToJSONValue(
                 ListToolsResult(tools: tools)
             )
-            onmessage?(.response(JSONRPCResponse(id: request.id, result: result)))
+            await emit(.message(.response(JSONRPCResponse(id: request.id, result: result))))
 
         case "tools/call":
             try await delay(10)
@@ -228,13 +239,15 @@ public final class MockMCPTransport: MCPTransport, @unchecked Sendable {
 
         let contents = resourceContents.filter { $0.uri == uri }
         guard !contents.isEmpty else {
-            onmessage?(
-                .error(
-                    JSONRPCError(
-                        id: request.id,
-                        error: JSONRPCErrorObject(
-                            code: -32002,
-                            message: "Resource \(uri) not found"
+            await emit(
+                .message(
+                    .error(
+                        JSONRPCError(
+                            id: request.id,
+                            error: JSONRPCErrorObject(
+                                code: -32002,
+                                message: "Resource \(uri) not found"
+                            )
                         )
                     )
                 )
@@ -245,7 +258,7 @@ public final class MockMCPTransport: MCPTransport, @unchecked Sendable {
         let result = try encodeToJSONValue(
             ReadResourceResult(contents: contents)
         )
-        onmessage?(.response(JSONRPCResponse(id: request.id, result: result)))
+        await emit(.message(.response(JSONRPCResponse(id: request.id, result: result))))
     }
 
     private func handleGetPrompt(_ request: JSONRPCRequest) async throws {
@@ -253,13 +266,15 @@ public final class MockMCPTransport: MCPTransport, @unchecked Sendable {
         guard case .string(let name) = dict["name"] else { return }
 
         guard let promptResult = promptResults[name] else {
-            onmessage?(
-                .error(
-                    JSONRPCError(
-                        id: request.id,
-                        error: JSONRPCErrorObject(
-                            code: -32602,
-                            message: "Invalid params: Unknown prompt \(name)"
+            await emit(
+                .message(
+                    .error(
+                        JSONRPCError(
+                            id: request.id,
+                            error: JSONRPCErrorObject(
+                                code: -32602,
+                                message: "Invalid params: Unknown prompt \(name)"
+                            )
                         )
                     )
                 )
@@ -268,7 +283,7 @@ public final class MockMCPTransport: MCPTransport, @unchecked Sendable {
         }
 
         let result = try encodeToJSONValue(promptResult)
-        onmessage?(.response(JSONRPCResponse(id: request.id, result: result)))
+        await emit(.message(.response(JSONRPCResponse(id: request.id, result: result))))
     }
 
     private func handleToolCall(_ request: JSONRPCRequest) async throws {
@@ -277,17 +292,19 @@ public final class MockMCPTransport: MCPTransport, @unchecked Sendable {
         let arguments = dict["arguments"]
 
         guard let tool = tools.first(where: { $0.name == toolName }) else {
-            onmessage?(
-                .error(
-                    JSONRPCError(
-                        id: request.id,
-                        error: JSONRPCErrorObject(
-                            code: -32601,
-                            message: "Tool \(toolName) not found",
-                            data: .object([
-                                "availableTools": .array(tools.map { .string($0.name) }),
-                                "requestedTool": .string(toolName),
-                            ])
+            await emit(
+                .message(
+                    .error(
+                        JSONRPCError(
+                            id: request.id,
+                            error: JSONRPCErrorObject(
+                                code: -32601,
+                                message: "Tool \(toolName) not found",
+                                data: .object([
+                                    "availableTools": .array(tools.map { .string($0.name) }),
+                                    "requestedTool": .string(toolName),
+                                ])
+                            )
                         )
                     )
                 )
@@ -296,17 +313,19 @@ public final class MockMCPTransport: MCPTransport, @unchecked Sendable {
         }
 
         if failOnInvalidToolParams {
-            onmessage?(
-                .error(
-                    JSONRPCError(
-                        id: request.id,
-                        error: JSONRPCErrorObject(
-                            code: -32602,
-                            message: "Invalid tool inputSchema: \(stringifyJSONValue(arguments))",
-                            data: .object([
-                                "expectedSchema": tool.inputSchema,
-                                "receivedArguments": arguments ?? .null,
-                            ])
+            await emit(
+                .message(
+                    .error(
+                        JSONRPCError(
+                            id: request.id,
+                            error: JSONRPCErrorObject(
+                                code: -32602,
+                                message: "Invalid tool inputSchema: \(stringifyJSONValue(arguments))",
+                                data: .object([
+                                    "expectedSchema": tool.inputSchema,
+                                    "receivedArguments": arguments ?? .null,
+                                ])
+                            )
                         )
                     )
                 )
@@ -316,7 +335,7 @@ public final class MockMCPTransport: MCPTransport, @unchecked Sendable {
 
         if let customResult = toolCallResults[toolName] {
             let result = try encodeToJSONValue(customResult)
-            onmessage?(.response(JSONRPCResponse(id: request.id, result: result)))
+            await emit(.message(.response(JSONRPCResponse(id: request.id, result: result))))
             return
         }
 
@@ -331,7 +350,7 @@ public final class MockMCPTransport: MCPTransport, @unchecked Sendable {
             )
         )
 
-        onmessage?(.response(JSONRPCResponse(id: request.id, result: result)))
+        await emit(.message(.response(JSONRPCResponse(id: request.id, result: result))))
     }
 
     private func defaultInitializeResult() -> JSONValue {

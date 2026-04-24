@@ -6,7 +6,7 @@ Source review: `.context/attachments/pasted_text_2026-04-24_09-17-59.txt`
 
 - Open tracker items: `2`
 - Lower-priority follow-ups: `4`
-- `@unchecked Sendable` declarations remaining in `Sources/`: `138`
+- `@unchecked Sendable` declarations remaining in `Sources/`: `134`
 - `nonisolated(unsafe)` declarations remaining in `Sources/`: `5`
 
 Notes:
@@ -72,6 +72,21 @@ Status legend:
     - `CreateUIMessageStream` and `ReadUIMessageStream` now use actor coordinators instead of lock-backed controllers
     - `teeAsyncThrowingStream` now uses an actor distributor
     - `AsyncIterableStream` is now a plain `Sendable` struct; the remaining unchecked surface in that file is `AnySendableError`
+  - completed the second architecture-first slice for MCP client / transport runtime state:
+    - `DefaultMCPClient`, `HttpMCPTransport`, `SseMCPTransport`, and `MockMCPTransport` are now actor-owned coordinators instead of lock-backed `@unchecked Sendable` classes
+    - the public transport surface no longer exposes mutable `onclose` / `onerror` / `onmessage` callback properties; it now uses one async event registration boundary
+    - `MCPClient.onElicitationRequest(...)` is now `async throws` so handler registration happens on the same isolation boundary as request state
+    - `MockMCPTransport` test support now uses async message snapshots and explicit server-message injection instead of reaching into callback properties
+  - focused MCP suites passed after the refactor:
+    - `swift test --filter MCPClientTests`
+    - `swift test --filter HttpMCPTransportTests`
+    - `swift test --filter SseMCPTransportTests`
+    - `swift test --filter MockMCPTransportTests`
+  - raw unchecked count reduction from the MCP slice: `138 -> 134`
+  - follow-up intentionally deferred to the logger / `swift-log` migration:
+    - MCP transport events now surface sendable error wrappers carrying message text rather than the original concrete error objects
+    - this is acceptable for the current client/tests, which only need reporting text, but it is still an API-shape change for direct transport consumers
+    - track the eventual redesign under `Harden warning-observer tests against cross-suite interference`, where the broader logging / error-reporting boundary will be revisited
   - focused suites covering create/read/process/finish/UI stream behavior and `AsyncIterableStream` passed after the refactor
   - remaining `@unchecked Sendable` review still applies elsewhere, but this establishes the reusable pattern for the rest of item 6:
     - mutable runtime state behind one isolation boundary
@@ -126,6 +141,9 @@ Status legend:
     - injected recorder / interceptor / sink style test capture
     - instance-scoped test observation instead of process-global observer state
   - this looks more like a port-shaped test-hook artifact than a Swift-first long-term design
+  - fold the MCP transport event error surface into the logger / `swift-log` migration:
+    - revisit whether transport events should keep a message-only sendable wrapper or emit a more structured sendable error payload once the logging/error-reporting boundary is redesigned
+    - do not treat this as a separate MCP runtime-state refactor unless direct transport consumers start needing typed error inspection before the logging migration
 
 ## Current remaining shared-state list
 
@@ -150,5 +168,6 @@ Why this is next:
 - the warning-observer todo is real but test-only and not the main production concurrency migration risk
 
 Immediate follow-up within item 6:
-- MCP client / transport state machines
 - remaining stream / pipeline coordinators such as `RunToolsTransformation`
+- utility runtime state such as `DelayedPromise`, `ResolvablePromise`, and `SerialJobExecutor`
+- keep the MCP transport error-typing follow-up deferred to the logging / `swift-log` migration noted above, not as a separate item-6 runtime-state slice unless requirements change

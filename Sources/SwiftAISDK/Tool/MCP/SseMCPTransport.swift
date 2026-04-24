@@ -21,7 +21,6 @@ extension URL {
         guard let scheme = scheme?.lowercased(),
               let host = host?.lowercased()
         else {
-            // Best-effort fallback for non-absolute URLs.
             var components: [String] = []
 
             if let scheme = scheme {
@@ -68,37 +67,19 @@ extension URL {
  - Note: Requires macOS 12.0+ for streaming bytes API
  */
 @available(macOS 12.0, iOS 15.0, watchOS 8.0, tvOS 15.0, *)
-public final class SseMCPTransport: MCPTransport, @unchecked Sendable {
-    private let stateLock = NSLock()
-    private var _endpoint: URL?
-    private var _streamTask: Task<Void, Never>?
-    private let url: URL
-    private let session: URLSession
-    private var _connected = false
-    private let headers: [String: String]?
-    private let authProvider: (any OAuthClientProvider)?
+public actor SseMCPTransport: MCPTransport {
+    nonisolated private let url: URL
+    nonisolated private let session: URLSession
+    nonisolated private let headers: [String: String]?
+    nonisolated private let authProvider: (any OAuthClientProvider)?
+
+    private var endpoint: URL?
+    private var streamTask: Task<Void, Never>?
+    private var connected = false
     private var resourceMetadataUrl: URL?
+    private var eventHandler: MCPTransportEventHandler?
 
-    private var endpoint: URL? {
-        get { stateLock.withLock { _endpoint } }
-        set { stateLock.withLock { _endpoint = newValue } }
-    }
-
-    private var streamTask: Task<Void, Never>? {
-        get { stateLock.withLock { _streamTask } }
-        set { stateLock.withLock { _streamTask = newValue } }
-    }
-
-    private var connected: Bool {
-        get { stateLock.withLock { _connected } }
-        set { stateLock.withLock { _connected = newValue } }
-    }
-
-    public var onclose: (@Sendable () -> Void)?
-    public var onerror: (@Sendable (Error) -> Void)?
-    public var onmessage: (@Sendable (JSONRPCMessage) -> Void)?
-
-    public convenience init(config: MCPTransportConfig) throws {
+    public init(config: MCPTransportConfig) throws {
         try self.init(config: config, session: .shared)
     }
 
@@ -112,7 +93,7 @@ public final class SseMCPTransport: MCPTransport, @unchecked Sendable {
         self.authProvider = config.authProvider
     }
 
-    public convenience init(
+    public init(
         url: String,
         headers: [String: String]? = nil,
         authProvider: (any OAuthClientProvider)? = nil
@@ -133,6 +114,46 @@ public final class SseMCPTransport: MCPTransport, @unchecked Sendable {
         self.session = session
         self.headers = headers
         self.authProvider = authProvider
+    }
+
+    public func setEventHandler(_ handler: MCPTransportEventHandler?) async {
+        eventHandler = handler
+    }
+
+    public func start() async throws {
+        if connected {
+            return
+        }
+
+        try await establishConnection(triedAuth: false)
+    }
+
+    public func close() async throws {
+        connected = false
+        let taskToAwait = streamTask
+        streamTask = nil
+
+        taskToAwait?.cancel()
+        if let taskToAwait {
+            _ = await taskToAwait.result
+        }
+
+        await emit(.close)
+    }
+
+    public func send(message: JSONRPCMessage) async throws {
+        guard let endpoint, connected else {
+            throw MCPClientError(message: "MCP SSE Transport Error: Not connected")
+        }
+
+        await attemptSend(endpoint: endpoint, message: message, triedAuth: false)
+    }
+
+    // MARK: - Private Methods
+
+    private func emit(_ event: MCPTransportEvent) async {
+        guard let eventHandler else { return }
+        await eventHandler(event)
     }
 
     private func commonHeaders(base: [String: String]) async -> [String: String] {
@@ -161,40 +182,6 @@ public final class SseMCPTransport: MCPTransport, @unchecked Sendable {
         )
     }
 
-    public func start() async throws {
-        if connected {
-            return
-        }
-
-        try await establishConnection(triedAuth: false)
-    }
-
-    public func close() async throws {
-        let taskToAwait = stateLock.withLock {
-            _connected = false
-            let task = _streamTask
-            _streamTask = nil
-            return task
-        }
-
-        taskToAwait?.cancel()
-        if let taskToAwait {
-            _ = await taskToAwait.result
-        }
-
-        onclose?()
-    }
-
-    public func send(message: JSONRPCMessage) async throws {
-        guard let endpoint = endpoint, connected else {
-            throw MCPClientError(message: "MCP SSE Transport Error: Not connected")
-        }
-
-        await attemptSend(endpoint: endpoint, message: message, triedAuth: false)
-    }
-
-    // MARK: - Private Methods
-
     private func attemptSend(endpoint: URL, message: JSONRPCMessage, triedAuth: Bool) async {
         do {
             let headers = await commonHeaders(base: [
@@ -211,7 +198,9 @@ public final class SseMCPTransport: MCPTransport, @unchecked Sendable {
 
             let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse else {
-                onerror?(MCPClientError(message: "MCP SSE Transport Error: Invalid response type"))
+                await emit(.error(MCPTransportEventError(
+                    MCPClientError(message: "MCP SSE Transport Error: Invalid response type")
+                )))
                 return
             }
 
@@ -226,11 +215,11 @@ public final class SseMCPTransport: MCPTransport, @unchecked Sendable {
                         resourceMetadataUrl: resourceMetadataUrl
                     )
                     guard result == .authorized else {
-                        onerror?(UnauthorizedError())
+                        await emit(.error(MCPTransportEventError(UnauthorizedError())))
                         return
                     }
                 } catch {
-                    onerror?(error)
+                    await emit(.error(MCPTransportEventError(error)))
                     return
                 }
 
@@ -240,58 +229,66 @@ public final class SseMCPTransport: MCPTransport, @unchecked Sendable {
 
             guard (200...299).contains(http.statusCode) else {
                 let text = String(data: data, encoding: .utf8) ?? "null"
-                onerror?(
+                await emit(.error(MCPTransportEventError(
                     MCPClientError(
                         message: "MCP SSE Transport Error: POSTing to endpoint (HTTP \(http.statusCode)): \(text)"
                     )
-                )
+                )))
                 return
             }
         } catch is CancellationError {
             return
         } catch {
-            onerror?(error)
+            await emit(.error(MCPTransportEventError(error)))
         }
     }
 
     private func establishConnection(triedAuth: Bool) async throws {
-        return try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             var didResolve = false
 
-            streamTask = Task {
+            let task = Task { [weak self] in
+                guard let self else {
+                    if !didResolve {
+                        didResolve = true
+                        continuation.resume(throwing: MCPClientError(message: "MCP SSE Transport Error: Transport deallocated"))
+                    }
+                    return
+                }
+
                 do {
                     var triedAuthLocal = triedAuth
                     var asyncBytes: URLSession.AsyncBytes?
 
                     while true {
-                        var request = URLRequest(url: url)
+                        var request = URLRequest(url: self.url)
                         request.httpMethod = "GET"
 
-                        let headers = await commonHeaders(base: [
+                        let headers = await self.commonHeaders(base: [
                             "Accept": "text/event-stream"
                         ])
                         for (key, value) in headers {
                             request.setValue(value, forHTTPHeaderField: key)
                         }
 
-                        let (bytes, response) = try await session.bytes(for: request)
+                        let (bytes, response) = try await self.session.bytes(for: request)
                         guard let httpResponse = response as? HTTPURLResponse else {
                             throw MCPClientError(message: "MCP SSE Transport Error: Invalid response type")
                         }
 
-                        if httpResponse.statusCode == 401, let authProvider, !triedAuthLocal {
-                            resourceMetadataUrl = extractResourceMetadataUrl(httpResponse)
+                        if httpResponse.statusCode == 401, let authProvider = self.authProvider, !triedAuthLocal {
+                            await self.setResourceMetadataUrl(extractResourceMetadataUrl(httpResponse))
                             do {
                                 let result = try await auth(
                                     authProvider,
-                                    serverUrl: url,
+                                    serverUrl: self.url,
                                     authorizationCode: nil,
                                     scope: nil,
-                                    resourceMetadataUrl: resourceMetadataUrl
+                                    resourceMetadataUrl: await self.resourceMetadataUrlValue()
                                 )
                                 guard result == .authorized else {
                                     let error = UnauthorizedError()
-                                    onerror?(error)
+                                    await self.emit(.error(MCPTransportEventError(error)))
                                     if !didResolve {
                                         didResolve = true
                                         continuation.resume(throwing: error)
@@ -299,7 +296,7 @@ public final class SseMCPTransport: MCPTransport, @unchecked Sendable {
                                     return
                                 }
                             } catch {
-                                onerror?(error)
+                                await self.emit(.error(MCPTransportEventError(error)))
                                 if !didResolve {
                                     didResolve = true
                                     continuation.resume(throwing: error)
@@ -317,7 +314,7 @@ public final class SseMCPTransport: MCPTransport, @unchecked Sendable {
                                 errorMessage += ". This server does not support SSE transport. Try using `http` transport instead"
                             }
                             let error = MCPClientError(message: errorMessage)
-                            onerror?(error)
+                            await self.emit(.error(MCPTransportEventError(error)))
                             if !didResolve {
                                 didResolve = true
                                 continuation.resume(throwing: error)
@@ -331,97 +328,62 @@ public final class SseMCPTransport: MCPTransport, @unchecked Sendable {
 
                     guard let asyncBytes else { return }
 
-                    // Convert URLSession.AsyncBytes to AsyncThrowingStream<Data, Error>
-                    let dataStream = AsyncThrowingStream<Data, Error> { streamContinuation in
-                        Task {
-                            do {
-                                var buffer = Data()
-                                for try await byte in asyncBytes {
-                                    buffer.append(byte)
-                                    // Yield chunks periodically (every 1KB or at line breaks)
-                                    if buffer.count >= 1024 || byte == UInt8(ascii: "\n") {
-                                        streamContinuation.yield(buffer)
-                                        buffer.removeAll(keepingCapacity: true)
-                                    }
-                                }
-                                // Yield remaining buffer
-                                if !buffer.isEmpty {
-                                    streamContinuation.yield(buffer)
-                                }
-                                streamContinuation.finish()
-                            } catch {
-                                streamContinuation.finish(throwing: error)
-                            }
-                        }
-                    }
+                    let eventStream = makeServerSentEventStream(from: Self.dataStream(from: asyncBytes))
 
-                    // Parse SSE stream
-                    let eventStream = makeServerSentEventStream(from: dataStream)
-
-                    // Process events
                     for try await event in eventStream {
-                        // Check for cancellation
                         if Task.isCancelled {
                             return
                         }
 
                         switch event.event {
                         case "endpoint":
-                            // Parse and validate endpoint URL
-                            guard let endpointUrl = URL(string: event.data, relativeTo: url) else {
+                            guard let endpointUrl = URL(string: event.data, relativeTo: self.url) else {
                                 throw MCPClientError(
                                     message: "MCP SSE Transport Error: Invalid endpoint URL: \(event.data)"
                                 )
                             }
 
-                            // Verify same origin (matches TypeScript: endpointUrl.origin !== url.origin)
-                            if endpointUrl.origin != url.origin {
+                            if endpointUrl.origin != self.url.origin {
                                 throw MCPClientError(
                                     message: "MCP SSE Transport Error: Endpoint origin does not match connection origin: \(endpointUrl.origin)"
                                 )
                             }
 
-                            self.endpoint = endpointUrl
-                            self.connected = true
-
-                            // Resolve connection promise
+                            await self.setConnectedEndpoint(endpointUrl)
                             if !didResolve {
                                 didResolve = true
                                 continuation.resume()
                             }
 
                         case "message":
-                            // Parse and validate JSON-RPC message
                             guard let data = event.data.data(using: .utf8) else {
-                                let error = MCPClientError(
-                                    message: "MCP SSE Transport Error: Failed to decode message data"
-                                )
-                                self.onerror?(error)
+                                await self.emit(.error(MCPTransportEventError(
+                                    MCPClientError(
+                                        message: "MCP SSE Transport Error: Failed to decode message data"
+                                    )
+                                )))
                                 continue
                             }
 
                             do {
-                                let decoder = JSONDecoder()
-                                let message = try decoder.decode(JSONRPCMessage.self, from: data)
-                                self.onmessage?(message)
+                                let message = try JSONDecoder().decode(JSONRPCMessage.self, from: data)
+                                await self.emit(.message(message))
                             } catch {
-                                let mcpError = MCPClientError(
-                                    message: "MCP SSE Transport Error: Failed to parse message",
-                                    cause: error
-                                )
-                                self.onerror?(mcpError)
-                                // Continue processing other messages
+                                await self.emit(.error(MCPTransportEventError(
+                                    MCPClientError(
+                                        message: "MCP SSE Transport Error: Failed to parse message",
+                                        cause: error
+                                    )
+                                )))
                             }
 
                         default:
-                            // Ignore other event types
                             break
                         }
                     }
 
-                    // Stream ended
-                    if self.connected {
-                        self.connected = false
+                    let wasConnected = await self.markConnectionClosed()
+                    if wasConnected {
                         throw MCPClientError(
                             message: "MCP SSE Transport Error: Connection closed unexpectedly"
                         )
@@ -433,17 +395,60 @@ public final class SseMCPTransport: MCPTransport, @unchecked Sendable {
                         continuation.resume(throwing: error)
                     }
                 } catch is CancellationError {
-                    // Task was cancelled, exit gracefully
                     if !didResolve {
                         didResolve = true
                         continuation.resume(throwing: CancellationError())
                     }
                 } catch {
-                    self.onerror?(error)
+                    await self.emit(.error(MCPTransportEventError(error)))
                     if !didResolve {
                         didResolve = true
                         continuation.resume(throwing: error)
                     }
+                }
+            }
+
+            streamTask = task
+        }
+    }
+
+    private func setConnectedEndpoint(_ endpoint: URL) {
+        self.endpoint = endpoint
+        self.connected = true
+    }
+
+    private func markConnectionClosed() -> Bool {
+        let wasConnected = connected
+        connected = false
+        return wasConnected
+    }
+
+    private func setResourceMetadataUrl(_ url: URL?) {
+        resourceMetadataUrl = url
+    }
+
+    private func resourceMetadataUrlValue() -> URL? {
+        resourceMetadataUrl
+    }
+
+    private nonisolated static func dataStream(from bytes: URLSession.AsyncBytes) -> AsyncThrowingStream<Data, Error> {
+        AsyncThrowingStream { streamContinuation in
+            Task {
+                do {
+                    var buffer = Data()
+                    for try await byte in bytes {
+                        buffer.append(byte)
+                        if buffer.count >= 1024 || byte == UInt8(ascii: "\n") {
+                            streamContinuation.yield(buffer)
+                            buffer.removeAll(keepingCapacity: true)
+                        }
+                    }
+                    if !buffer.isEmpty {
+                        streamContinuation.yield(buffer)
+                    }
+                    streamContinuation.finish()
+                } catch {
+                    streamContinuation.finish(throwing: error)
                 }
             }
         }

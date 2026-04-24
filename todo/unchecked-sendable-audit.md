@@ -5,7 +5,7 @@ Date: 2026-04-24
 Scope:
 - audited `Sources/` using the `swift-concurrency` and `swift-concurrency-pro` review criteria
 - inventory source: `grep -RIn "@unchecked Sendable" Sources`
-- current raw count: `138`
+- current raw count: `134`
 
 ## Summary
 
@@ -22,8 +22,20 @@ Completed first-wave slice:
 - raw count reduction from this wave: `143 -> 138`
 - remaining unchecked item in the touched stream facade: `AnySendableError` in `AsyncIterableStream`
 
+Completed second-wave slice:
+- refactored the MCP runtime (`MCPClient`, `HttpMCPTransport`, `SseMCPTransport`, `MockMCPTransport`) to use actor-owned client/transport state machines
+- removed the mutable transport callback-property surface in favor of one async event registration boundary
+- changed `MCPClient.onElicitationRequest(...)` to `async throws`
+- updated MCP test support to use async message snapshots and explicit server-message injection
+- raw count reduction from this wave: `138 -> 134`
+- focused suites passed:
+  - `swift test --filter MCPClientTests`
+  - `swift test --filter HttpMCPTransportTests`
+  - `swift test --filter SseMCPTransportTests`
+  - `swift test --filter MockMCPTransportTests`
+
 Count concentration by target:
-- `SwiftAISDK`: `49`
+- `SwiftAISDK`: `40`
 - `AISDKZodAdapter`: `38`
 - `AISDKProvider`: `30`
 - `AISDKProviderUtils`: `15`
@@ -85,6 +97,11 @@ Status after first wave:
 
 ### 2. MCP client / transport state machines
 
+Status:
+- completed
+- the four production MCP runtime coordinators no longer use `@unchecked Sendable`
+- this validated the same migration template on a network-facing state machine boundary, not just stream/UI code
+
 Why second:
 - network transport code mixes locks, callbacks, task handles, reconnect state, and externally-invoked closures
 - this is a classic place where `@unchecked Sendable` papers over a state-machine design that should have an explicit isolation boundary
@@ -104,6 +121,10 @@ Preferred redesign direction:
 - actor-backed transport/client state
 - lexical ownership of request tasks where possible
 - remove lock-managed mutable dictionaries/arrays from sendable classes
+
+Next target after MCP:
+- `Sources/SwiftAISDK/GenerateText/RunToolsTransformation.swift`
+- then the utility runtime-state cluster (`DelayedPromise`, `ResolvablePromise`, `SerialJobExecutor`, timeout/cancellation helpers)
 
 ### 3. Core utility synchronization wrappers used across the package
 

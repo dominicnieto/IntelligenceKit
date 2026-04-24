@@ -26,6 +26,19 @@ struct MCPClientTests {
         return predicate()
     }
 
+    private func eventuallyAsync(
+        timeout: TimeInterval = 1.0,
+        intervalNanoseconds: UInt64 = 10_000_000,
+        _ predicate: @escaping @Sendable () async -> Bool
+    ) async -> Bool {
+        let start = Date()
+        while Date().timeIntervalSince(start) < timeout {
+            if await predicate() { return true }
+            try? await Task.sleep(nanoseconds: intervalNanoseconds)
+        }
+        return await predicate()
+    }
+
     @Test("should return AI SDK compatible tool set")
     func toolSetDynamicTools() async throws {
         let transport = MockMCPTransport()
@@ -592,7 +605,7 @@ struct MCPClientTests {
         )
         defer { Task { try? await client.close() } }
 
-        for message in transport.sentMessages {
+        for message in await transport.sentMessagesSnapshot() {
             guard case .request(let request) = message else { continue }
             guard request.method == "initialize" else { continue }
             guard let params = request.params, case .object(let obj) = params else { continue }
@@ -616,7 +629,7 @@ struct MCPClientTests {
         )
         defer { Task { try? await client.close() } }
 
-        try client.onElicitationRequest(schema: ElicitationRequestSchema.self) { request in
+        try await client.onElicitationRequest(schema: ElicitationRequestSchema.self) { request in
             #expect(request.params.message.contains("GitHub"))
             return ElicitResult(action: .accept, content: ["name": .string("octocat")])
         }
@@ -637,10 +650,11 @@ struct MCPClientTests {
             ])
         )
 
-        transport.onmessage?(.request(serverRequest))
+        await transport.injectServerMessage(.request(serverRequest))
 
-        let responseWasSent = await eventually {
-            transport.sentMessages.contains { message in
+        let responseWasSent = await eventuallyAsync {
+            let sentMessages = await transport.sentMessagesSnapshot()
+            return sentMessages.contains { message in
                 if case .response(let response) = message, response.id == .int(42) {
                     return true
                 }
@@ -653,7 +667,7 @@ struct MCPClientTests {
             return
         }
 
-        let sentResponseMessage = transport.sentMessages.first { message in
+        let sentResponseMessage = (await transport.sentMessagesSnapshot()).first { message in
             if case .response(let response) = message, response.id == .int(42) {
                 return true
             }
@@ -666,9 +680,9 @@ struct MCPClientTests {
         }
 
         if case .object(let obj) = response.result {
-            #expect(obj["action"] == .string("accept"))
+            #expect(obj["action"] == JSONValue.string("accept"))
             if case .object(let content) = obj["content"] {
-                #expect(content["name"] == .string("octocat"))
+                #expect(content["name"] == JSONValue.string("octocat"))
             } else {
                 Issue.record("Expected content object")
             }

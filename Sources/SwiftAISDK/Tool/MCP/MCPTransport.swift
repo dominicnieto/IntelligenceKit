@@ -14,6 +14,30 @@ import AISDKProviderUtils
 
 // MARK: - MCPTransport Protocol
 
+public enum MCPTransportEvent: Sendable {
+    case close
+    case error(MCPTransportEventError)
+    case message(JSONRPCMessage)
+}
+
+public struct MCPTransportEventError: Error, CustomStringConvertible, Sendable {
+    public let message: String
+
+    public init(_ error: any Error) {
+        if let error = error as? LocalizedError, let description = error.errorDescription {
+            message = description
+        } else {
+            message = String(describing: error)
+        }
+    }
+
+    public var description: String {
+        message
+    }
+}
+
+public typealias MCPTransportEventHandler = @Sendable (MCPTransportEvent) async -> Void
+
 /**
  Transport interface for MCP (Model Context Protocol) communication.
  Maps to the `Transport` interface in the MCP spec.
@@ -35,20 +59,8 @@ public protocol MCPTransport: Sendable {
      */
     func close() async throws
 
-    /**
-     Event handler for transport closure
-     */
-    var onclose: (@Sendable () -> Void)? { get set }
-
-    /**
-     Event handler for transport errors
-     */
-    var onerror: (@Sendable (Error) -> Void)? { get set }
-
-    /**
-     Event handler for received messages
-     */
-    var onmessage: (@Sendable (JSONRPCMessage) -> Void)? { get set }
+    /// Registers the single transport event consumer.
+    func setEventHandler(_ handler: MCPTransportEventHandler?) async
 }
 
 // MARK: - MCPTransportConfig

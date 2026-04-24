@@ -68,7 +68,8 @@ struct HttpMCPTransportTests {
             try await transport.start()
 
             let msgPromise = createResolvablePromise(of: JSONRPCMessage.self)
-            transport.onmessage = { msg in
+            await transport.setEventHandler { event in
+                guard case .message(let msg) = event else { return }
                 msgPromise.resolve(msg)
             }
 
@@ -135,7 +136,8 @@ struct HttpMCPTransportTests {
             try await transport.start()
 
             let msgPromise = createResolvablePromise(of: JSONRPCMessage.self)
-            transport.onmessage = { msg in
+            await transport.setEventHandler { event in
+                guard case .message(let msg) = event else { return }
                 msgPromise.resolve(msg)
             }
 
@@ -321,7 +323,8 @@ struct HttpMCPTransportTests {
         let transport = try HttpMCPTransport(config: MCPTransportConfig(type: "http", url: mcpUrl), session: session)
         do {
             let errorPromise = createResolvablePromise(of: Error.self)
-            transport.onerror = { error in
+            await transport.setEventHandler { event in
+                guard case .error(let error) = event else { return }
                 errorPromise.resolve(error)
             }
 
@@ -334,8 +337,7 @@ struct HttpMCPTransportTests {
             }
 
             let error = try await errorPromise.task.value
-            #expect(MCPClientError.isInstance(error))
-            let message = (error as? MCPClientError)?.message ?? String(describing: error)
+            let message = String(describing: error)
             #expect(message.contains("POSTing to endpoint"))
         } catch {
             controller.finish()
@@ -377,7 +379,8 @@ struct HttpMCPTransportTests {
         let transport = try HttpMCPTransport(config: MCPTransportConfig(type: "http", url: mcpUrl), session: session)
         do {
             let errorPromise = createResolvablePromise(of: Error.self)
-            transport.onerror = { error in
+            await transport.setEventHandler { event in
+                guard case .error(let error) = event else { return }
                 errorPromise.resolve(error)
             }
 
@@ -386,9 +389,8 @@ struct HttpMCPTransportTests {
             controller.write("event: message\ndata: {\"foo\":\"bar\"}\n\n")
 
             let error = try await errorPromise.task.value
-            #expect(MCPClientError.isInstance(error))
-            let message = (error as? MCPClientError)?.message ?? String(describing: error)
-            #expect(message.contains("Failed to parse message"))
+            let message = String(describing: error)
+            #expect(message.contains("Failed to parse"))
         } catch {
             controller.finish()
             try? await transport.close()

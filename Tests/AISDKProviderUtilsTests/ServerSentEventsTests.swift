@@ -4,6 +4,18 @@ import Testing
 
 @Suite("ServerSentEvents")
 struct ServerSentEventsTests {
+    private actor BoolProbe {
+        private var value = false
+
+        func setTrue() {
+            value = true
+        }
+
+        func get() -> Bool {
+            value
+        }
+    }
+
     private func makeStream(_ chunks: [Data]) -> AsyncThrowingStream<Data, Error> {
         AsyncThrowingStream { continuation in
             for chunk in chunks {
@@ -11,6 +23,19 @@ struct ServerSentEventsTests {
             }
             continuation.finish()
         }
+    }
+
+    private func eventually(
+        timeout: TimeInterval = 1.0,
+        intervalNanoseconds: UInt64 = 10_000_000,
+        _ predicate: @escaping @Sendable () async -> Bool
+    ) async -> Bool {
+        let start = Date()
+        while Date().timeIntervalSince(start) < timeout {
+            if await predicate() { return true }
+            try? await Task.sleep(nanoseconds: intervalNanoseconds)
+        }
+        return await predicate()
     }
 
     @Test("parses fragmented multibyte UTF-8 across chunk boundaries")
@@ -49,5 +74,34 @@ struct ServerSentEventsTests {
 
         #expect(events.count == 1)
         #expect(events[0].data == "line1\nline2")
+    }
+
+    @Test("cancels upstream when the consumer stops early")
+    func cancelsUpstreamWhenConsumerStopsEarly() async throws {
+        let terminationProbe = BoolProbe()
+        let stream = AsyncThrowingStream<Data, Error> { continuation in
+            continuation.yield(Data("data: hello\n\n".utf8))
+            continuation.onTermination = { _ in
+                Task {
+                    await terminationProbe.setTrue()
+                }
+            }
+        }
+
+        let events = makeServerSentEventStream(from: stream)
+        let consumer = Task {
+            for try await _ in events {
+                // Keep waiting for more input until the task is cancelled.
+            }
+        }
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+        consumer.cancel()
+        _ = await consumer.result
+
+        let upstreamCancelled = await eventually {
+            await terminationProbe.get()
+        }
+        #expect(upstreamCancelled)
     }
 }

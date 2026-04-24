@@ -51,6 +51,7 @@ private actor ReadUIMessageStreamCoordinator<Message: UIMessageConvertible> {
     private let errorHandler: (@Sendable (Error) -> Void)?
 
     private var hasErrored = false
+    private var isCancelled = false
     private var consumeTask: Task<Void, Never>?
 
     init(
@@ -66,6 +67,8 @@ private actor ReadUIMessageStreamCoordinator<Message: UIMessageConvertible> {
     }
 
     func start(stream: AsyncThrowingStream<AnyUIMessageChunk, Error>) {
+        guard !isCancelled else { return }
+
         let processedStream = processUIMessageStream(
             stream: stream,
             runUpdateMessageJob: { job in
@@ -84,7 +87,7 @@ private actor ReadUIMessageStreamCoordinator<Message: UIMessageConvertible> {
             }
         )
 
-        consumeTask = Task {
+        let task = Task {
             do {
                 for try await _ in processedStream {
                     // Drain the processed stream to keep state updates flowing.
@@ -95,6 +98,13 @@ private actor ReadUIMessageStreamCoordinator<Message: UIMessageConvertible> {
                 self.finishIfNeeded()
             }
         }
+
+        if isCancelled {
+            task.cancel()
+            return
+        }
+
+        consumeTask = task
     }
 
     private func emitCurrentMessage() async {
@@ -120,6 +130,7 @@ private actor ReadUIMessageStreamCoordinator<Message: UIMessageConvertible> {
     }
 
     func cancel() {
+        isCancelled = true
         let task = consumeTask
         consumeTask = nil
         task?.cancel()

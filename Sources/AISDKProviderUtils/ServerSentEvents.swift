@@ -68,7 +68,7 @@ package func makeServerSentEventStream(
     let bytes = DataChunkByteSequence(base: input)
 
     return AsyncThrowingStream { continuation in
-        Task {
+        let task = Task {
             do {
                 for try await event in bytes.events {
                     continuation.yield(
@@ -81,9 +81,15 @@ package func makeServerSentEventStream(
                     )
                 }
                 continuation.finish()
+            } catch is CancellationError {
+                continuation.finish()
             } catch {
                 continuation.finish(throwing: error)
             }
+        }
+
+        continuation.onTermination = { _ in
+            task.cancel()
         }
     }
 }

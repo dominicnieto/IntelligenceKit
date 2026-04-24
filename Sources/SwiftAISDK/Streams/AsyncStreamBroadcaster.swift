@@ -27,13 +27,13 @@ actor AsyncStreamBroadcaster<Element: Sendable> {
             throwing: Error.self
         )
 
-        addContinuation(continuation, id: identifier)
-
         continuation.onTermination = { _ in
             Task { [weak self] in
                 await self?.removeContinuation(id: identifier)
             }
         }
+
+        addContinuation(continuation, id: identifier)
 
         return stream
     }
@@ -82,7 +82,10 @@ actor AsyncStreamBroadcaster<Element: Sendable> {
         let replayCount = buffer.count
 
         // Register first so any elements appended after the snapshot are delivered live.
-        continuations[id] = continuation
+        // If the broadcaster is already terminal, avoid storing the continuation at all.
+        if terminalState == nil {
+            continuations[id] = continuation
+        }
 
         // Replay the snapshot [0 ..< replayCount]. Elements appended after the snapshot
         // will be forwarded by `send(_:)` thanks to the registration above.
@@ -92,7 +95,6 @@ actor AsyncStreamBroadcaster<Element: Sendable> {
             }
         }
 
-        // If the broadcaster is already terminal, finish the continuation now.
         if let terminalState {
             switch terminalState {
             case .finished:
@@ -109,5 +111,9 @@ actor AsyncStreamBroadcaster<Element: Sendable> {
 
     var bufferCountForTesting: Int {
         buffer.count
+    }
+
+    var continuationCountForTesting: Int {
+        continuations.count
     }
 }

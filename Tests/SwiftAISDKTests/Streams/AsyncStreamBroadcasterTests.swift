@@ -97,6 +97,20 @@ struct AsyncStreamBroadcasterTests {
         #expect(await broadcaster.bufferCountForTesting == 0)
     }
 
+    @Test("late registration after finish does not retain continuations")
+    func lateRegistrationAfterFinishDoesNotRetainContinuations() async throws {
+        let broadcaster = AsyncStreamBroadcaster<Int>()
+
+        await broadcaster.send(1)
+        await broadcaster.finish()
+
+        let stream = await broadcaster.register()
+        let values = try await collect(stream)
+
+        #expect(values == [1])
+        #expect(await broadcaster.continuationCountForTesting == 0)
+    }
+
     private func collect(
         _ stream: AsyncThrowingStream<Int, Error>
     ) async throws -> [Int] {

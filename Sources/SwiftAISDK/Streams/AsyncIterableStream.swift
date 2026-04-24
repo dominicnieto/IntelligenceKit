@@ -15,7 +15,7 @@ import Foundation
  - Added optional `_internal` hook for tests to observe cancellation (`onCancel`), matching the
    semantics of the TypeScript implementation's `reader.cancel()` callbacks.
  */
-public final class AsyncIterableStream<Element: Sendable>: AsyncSequence, @unchecked Sendable {
+public struct AsyncIterableStream<Element: Sendable>: AsyncSequence, Sendable {
     public typealias AsyncIterator = AsyncThrowingStream<Element, Error>.AsyncIterator
 
     private let stream: AsyncThrowingStream<Element, Error>

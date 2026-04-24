@@ -15,16 +15,12 @@ import AISDKProviderUtils
  Language model that is used by the AI SDK Core functions.
 
  Can be one of:
- - A string identifier (model ID that will be resolved via registry)
  - A `LanguageModelV3` protocol implementation
  - A `LanguageModelV2` protocol implementation
 
- TypeScript equivalent: `string | LanguageModelV3 | LanguageModelV2`
+ Swift fork equivalent: `LanguageModelV3 | LanguageModelV2`
  */
 public enum LanguageModel: Sendable {
-    /// Model identifier string (will be resolved via registry)
-    case string(String)
-
     /// Language model V3 implementation
     case v3(LanguageModelV3)
 

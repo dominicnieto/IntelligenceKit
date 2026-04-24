@@ -33,7 +33,7 @@ The Swift AI SDK is organized into focused packages:
 | Package                    | Purpose                                                    | Dependencies           |
 | -------------------------- | ---------------------------------------------------------- | ---------------------- |
 | **AISDKProvider**          | Foundation types and protocols (LanguageModelV3, etc.)     | None                   |
-| **AISDKProviderUtils**     | HTTP, JSON, schema, validation, retry utilities            | AISDKProvider          |
+| **AISDKProviderUtils**     | HTTP, JSON, schema, validation, retry utilities            | AISDKProvider, EventSource |
 | **SwiftAISDK**             | Core API (`generateText`, `streamText`, `generateObject`)  | Provider, ProviderUtils|
 | **OpenAIProvider**         | OpenAI integration (GPT-4, GPT-3.5, embeddings, etc.)      | Provider, ProviderUtils|
 | **AnthropicProvider**      | Anthropic Claude integration                               | Provider, ProviderUtils|
@@ -41,7 +41,6 @@ The Swift AI SDK is organized into focused packages:
 | **GroqProvider**           | Groq integration                                           | Provider, ProviderUtils|
 | **OpenAICompatibleProvider**| OpenAI-compatible API integration                         | Provider, ProviderUtils|
 | **AISDKZodAdapter**        | Zod-like schema DSL for structured data                    | AISDKProvider          |
-| **EventSourceParser**      | Server-Sent Events (SSE) parsing (internal utility)        | None                   |
 
 The list above is a sample. The Swift AI SDK ships with 37 provider modules; see [Providers](/providers/overview) for the full list.
 

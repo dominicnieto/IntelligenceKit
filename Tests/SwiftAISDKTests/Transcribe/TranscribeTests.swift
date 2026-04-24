@@ -160,13 +160,11 @@ struct TranscribeTests {
                 .unsupported(feature: "mediaType", details: "MediaType parameter not supported")
             ]
 
-            let previousLogger = logWarningsForTranscribe
-            defer { logWarningsForTranscribe = previousLogger }
-
             let recordedWarnings = ValueBox([[Warning]]())
-            logWarningsForTranscribe = { warnings in
+            logWarningsObserver = { warnings in
                 recordedWarnings.value.append(warnings)
             }
+            defer { logWarningsObserver = nil }
 
             let model = MockTranscriptionModelV3 { _ in
                 makeMockResponse(warnings: expectedWarnings)
@@ -177,7 +175,7 @@ struct TranscribeTests {
                 audio: .data(audioData)
             )
 
-            let expectedLogged = try expectedWarnings.map { Warning.transcriptionModel($0) }
+            let expectedLogged = expectedWarnings.map { Warning.transcriptionModel($0) }
             #expect(recordedWarnings.value.count == 1)
             #expect(recordedWarnings.value.first == expectedLogged)
         }
@@ -186,13 +184,11 @@ struct TranscribeTests {
     @Test("should call logWarnings with empty array when no warnings are present")
     func shouldCallLogWarningsWithEmptyArray() async throws {
         try await LogWarningsTestLock.shared.withLock {
-            let previousLogger = logWarningsForTranscribe
-            defer { logWarningsForTranscribe = previousLogger }
-
             let recordedWarnings = ValueBox([[Warning]]())
-            logWarningsForTranscribe = { warnings in
+            logWarningsObserver = { warnings in
                 recordedWarnings.value.append(warnings)
             }
+            defer { logWarningsObserver = nil }
 
             let model = MockTranscriptionModelV3 { _ in
                 makeMockResponse(warnings: [])

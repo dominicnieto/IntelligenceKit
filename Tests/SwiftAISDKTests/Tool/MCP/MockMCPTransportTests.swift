@@ -85,7 +85,8 @@ struct MockMCPTransportTests {
         let transport = MockMCPTransport()
 
         let messageBox = MessageBox()
-        transport.onmessage = { message in
+        await transport.setEventHandler { event in
+            guard case .message(let message) = event else { return }
             messageBox.set(message)
         }
 
@@ -128,7 +129,8 @@ struct MockMCPTransportTests {
         let transport = MockMCPTransport()
 
         let messageBox = MessageBox()
-        transport.onmessage = { message in
+        await transport.setEventHandler { event in
+            guard case .message(let message) = event else { return }
             messageBox.set(message)
         }
 
@@ -164,7 +166,8 @@ struct MockMCPTransportTests {
         let transport = MockMCPTransport(overrideTools: [])
 
         let messageBox = MessageBox()
-        transport.onmessage = { message in
+        await transport.setEventHandler { event in
+            guard case .message(let message) = event else { return }
             messageBox.set(message)
         }
 
@@ -205,7 +208,8 @@ struct MockMCPTransportTests {
         let transport = MockMCPTransport(initializeResult: customResult)
 
         let messageBox = MessageBox()
-        transport.onmessage = { message in
+        await transport.setEventHandler { event in
+            guard case .message(let message) = event else { return }
             messageBox.set(message)
         }
 
@@ -241,7 +245,8 @@ struct MockMCPTransportTests {
         let transport = MockMCPTransport(sendError: true)
 
         let errorBox = ErrorBox()
-        transport.onerror = { error in
+        await transport.setEventHandler { event in
+            guard case .error(let error) = event else { return }
             errorBox.set(error)
         }
 
@@ -258,7 +263,8 @@ struct MockMCPTransportTests {
         let transport = MockMCPTransport()
 
         let closeBox = BoolBox(false)
-        transport.onclose = {
+        await transport.setEventHandler { event in
+            guard case .close = event else { return }
             closeBox.set(true)
         }
 
@@ -286,7 +292,8 @@ struct MockMCPTransportTests {
         let transport = MockMCPTransport(overrideTools: customTools)
 
         let messageBox = MessageBox()
-        transport.onmessage = { message in
+        await transport.setEventHandler { event in
+            guard case .message(let message) = event else { return }
             messageBox.set(message)
         }
 

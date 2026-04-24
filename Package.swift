@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
@@ -28,18 +28,14 @@ let package = Package(
         .library(name: "XAIProvider", targets: ["XAIProvider"]),
         .library(name: "VercelProvider", targets: ["VercelProvider"]),
         .library(name: "AISDKJSONSchema", targets: ["AISDKJSONSchema"]),
-        .library(name: "EventSourceParser", targets: ["EventSourceParser"]), // internal lib for SSE
         .library(name: "AISDKZodAdapter", targets: ["AISDKZodAdapter"]),
         .executable(name: "playground", targets: ["SwiftAISDKPlayground"])
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0")
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
+        .package(url: "https://github.com/mattt/EventSource.git", from: "1.4.1")
     ],
     targets: [
-        // EventSourceParser - SSE parsing (internal utility)
-        .target(name: "EventSourceParser"),
-        .testTarget(name: "EventSourceParserTests", dependencies: ["EventSourceParser"]),
-
         // AISDKProvider - Foundation types (matches @ai-sdk/provider)
         // Language model interfaces (V2/V3), provider errors, JSONValue, shared types
         .target(name: "AISDKProvider", dependencies: []),
@@ -49,7 +45,11 @@ let package = Package(
         // HTTP, JSON, schema, validation, retry, headers, ID generation, tools
         .target(
             name: "AISDKProviderUtils",
-            dependencies: ["AISDKProvider", "AISDKZodAdapter", "EventSourceParser"]
+            dependencies: [
+                "AISDKProvider",
+                "AISDKZodAdapter",
+                .product(name: "EventSource", package: "EventSource")
+            ]
         ),
         .testTarget(name: "AISDKProviderUtilsTests", dependencies: ["AISDKProviderUtils", "AISDKZodAdapter"]),
 
@@ -57,14 +57,14 @@ let package = Package(
         .target(name: "AISDKZodAdapter", dependencies: ["AISDKProvider"]),
 
         // Provider targets
-        .target(name: "OpenAIProvider", dependencies: ["AISDKProvider", "AISDKProviderUtils", "EventSourceParser"]),
+        .target(name: "OpenAIProvider", dependencies: ["AISDKProvider", "AISDKProviderUtils"]),
         .target(name: "OpenAICompatibleProvider", dependencies: ["AISDKProvider", "AISDKProviderUtils"]),
-        .target(name: "AnthropicProvider", dependencies: ["AISDKProvider", "AISDKProviderUtils", "EventSourceParser"]),
+        .target(name: "AnthropicProvider", dependencies: ["AISDKProvider", "AISDKProviderUtils"]),
         .target(name: "GatewayProvider", dependencies: ["AISDKProvider", "AISDKProviderUtils"]),
-        .target(name: "GoogleProvider", dependencies: ["AISDKProvider", "AISDKProviderUtils", "EventSourceParser"]),
+        .target(name: "GoogleProvider", dependencies: ["AISDKProvider", "AISDKProviderUtils"]),
         .target(name: "GoogleVertexProvider", dependencies: ["AISDKProvider", "AISDKProviderUtils", "GoogleProvider"]),
-        .target(name: "MistralProvider", dependencies: ["AISDKProvider", "AISDKProviderUtils", "EventSourceParser"]),
-        .target(name: "PerplexityProvider", dependencies: ["AISDKProvider", "AISDKProviderUtils", "EventSourceParser"]),
+        .target(name: "MistralProvider", dependencies: ["AISDKProvider", "AISDKProviderUtils"]),
+        .target(name: "PerplexityProvider", dependencies: ["AISDKProvider", "AISDKProviderUtils"]),
         .target(name: "ElevenLabsProvider", dependencies: ["AISDKProvider", "AISDKProviderUtils"]),
         .target(name: "XAIProvider", dependencies: ["AISDKProvider", "AISDKProviderUtils", "OpenAICompatibleProvider"]),
         .target(name: "VercelProvider", dependencies: ["AISDKProvider", "AISDKProviderUtils", "OpenAICompatibleProvider"]),
@@ -81,7 +81,7 @@ let package = Package(
 
         // SwiftAISDK - Main AI SDK (matches @ai-sdk/ai)
         // GenerateText, Registry, Middleware, Prompts, Tools, Telemetry
-        .target(name: "SwiftAISDK", dependencies: ["AISDKProvider", "AISDKProviderUtils", "AISDKJSONSchema", "EventSourceParser", "GatewayProvider"]),
+        .target(name: "SwiftAISDK", dependencies: ["AISDKProvider", "AISDKProviderUtils", "AISDKJSONSchema", "GatewayProvider"]),
         .testTarget(
             name: "SwiftAISDKTests",
             dependencies: ["SwiftAISDK", "OpenAIProvider", "OpenAICompatibleProvider"],
@@ -120,5 +120,6 @@ let package = Package(
             ],
             exclude: ["README.md"]
         )
-    ]
+    ],
+    swiftLanguageModes: [.v6]
 )

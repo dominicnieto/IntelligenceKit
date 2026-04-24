@@ -8,9 +8,6 @@ import AISDKProviderUtils
  Port of `@ai-sdk/ai/src/generate-speech/generate-speech.ts`.
  */
 
-/// Internal hook to allow tests to observe warning logging behavior.
-nonisolated(unsafe) var logWarningsForGenerateSpeech: ([Warning]) -> Void = logWarnings
-
 private func makeHeadersWithUserAgent(_ headers: [String: String]?) -> [String: String] {
     let normalized: [String: String?]
     if let headers {
@@ -132,7 +129,7 @@ public func generateSpeech(
 
     let warnings = result.warnings
     let warningEntries = warnings.map { Warning.speechModel($0) }
-    logWarningsForGenerateSpeech(warningEntries)
+    logWarnings(warningEntries)
 
     let responseMetadata = SpeechModelResponseMetadata(
         timestamp: result.response.timestamp,

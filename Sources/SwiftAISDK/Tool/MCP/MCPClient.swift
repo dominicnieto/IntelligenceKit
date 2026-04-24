@@ -111,7 +111,7 @@ public protocol MCPClient: Sendable {
     func onElicitationRequest(
         schema: Any.Type,
         handler: @escaping @Sendable (ElicitationRequest) async throws -> ElicitResult
-    ) throws
+    ) async throws
 
     /// Closes the client connection
     func close() async throws
@@ -184,13 +184,12 @@ public struct MCPGetPromptArgs: Sendable {
 // MARK: - Default implementation
 
 @available(macOS 12.0, iOS 15.0, watchOS 8.0, tvOS 15.0, *)
-internal final class DefaultMCPClient: MCPClient, @unchecked Sendable {
-    private var transport: MCPTransport
+internal actor DefaultMCPClient: MCPClient {
+    private let transport: MCPTransport
     private let onUncaughtError: (@Sendable (Error) -> Void)?
     private let clientInfo: Configuration
     private let clientCapabilities: ClientCapabilities
 
-    private let lock = NSLock()
     private var requestMessageId: Int = 0
     private var responseHandlers: [Int: @Sendable (Result<JSONRPCResponse, Error>) -> Void] = [:]
     private var serverCapabilities: ServerCapabilities = ServerCapabilities()
@@ -208,46 +207,17 @@ internal final class DefaultMCPClient: MCPClient, @unchecked Sendable {
         case .custom(let customTransport):
             transport = customTransport
         }
-
-        transport.onclose = { [weak self] in
-            self?.handleClose()
-        }
-
-        transport.onerror = { [weak self] error in
-            self?.handleError(error)
-        }
-
-        transport.onmessage = { [weak self] message in
-            guard let self else { return }
-
-            switch message {
-            case .request(let request):
-                Task { [weak self] in
-                    await self?.onRequestMessage(request)
-                }
-
-            case .notification:
-                self.handleError(MCPClientError(message: "Unsupported message type"))
-
-            case .response(let response):
-                self.handleResponse(.success(response))
-
-            case .error(let errorResponse):
-                let error = MCPClientError(
-                    message: errorResponse.error.message,
-                    cause: nil,
-                    data: errorResponse.error.data,
-                    code: errorResponse.error.code
-                )
-                self.handleErrorResponse(errorResponse.id, error: error)
-            }
-        }
     }
 
     func initialize() async throws {
+        await transport.setEventHandler { [weak self] event in
+            guard let self else { return }
+            await self.handleTransportEvent(event)
+        }
+
         do {
             try await transport.start()
-            lock.withLock { isClosed = false }
+            isClosed = false
 
             let initResult: InitializeResult = try await request(
                 method: "initialize",
@@ -269,11 +239,8 @@ internal final class DefaultMCPClient: MCPClient, @unchecked Sendable {
                 )
             }
 
-            lock.withLock {
-                serverCapabilities = initResult.capabilities
-            }
+            serverCapabilities = initResult.capabilities
 
-            // Complete initialization handshake:
             try await sendNotification(method: "notifications/initialized")
         } catch {
             try? await close()
@@ -282,9 +249,8 @@ internal final class DefaultMCPClient: MCPClient, @unchecked Sendable {
     }
 
     func close() async throws {
-        let wasClosed = lock.withLock { isClosed }
-        guard !wasClosed else { return }
-
+        guard !isClosed else { return }
+        await transport.setEventHandler(nil)
         try await transport.close()
         handleClose()
     }
@@ -297,8 +263,8 @@ internal final class DefaultMCPClient: MCPClient, @unchecked Sendable {
         for mcpTool in listToolsResult.tools {
             let name = mcpTool.name
 
-            if case .schemas(let schemaDict) = schemas {
-                if schemaDict[name] == nil { continue }
+            if case .schemas(let schemaDict) = schemas, schemaDict[name] == nil {
+                continue
             }
 
             let resolvedTitle = mcpTool.title ?? mcpTool.annotations?.title
@@ -328,7 +294,7 @@ internal final class DefaultMCPClient: MCPClient, @unchecked Sendable {
                     return .value(extracted)
                 }
 
-                return .value(try self.callToolResultToJSON(callResult))
+                return .value(try Self.callToolResultToJSON(callResult))
             }
 
             let tool: Tool
@@ -386,7 +352,7 @@ internal final class DefaultMCPClient: MCPClient, @unchecked Sendable {
     func onElicitationRequest(
         schema: Any.Type,
         handler: @escaping @Sendable (ElicitationRequest) async throws -> ElicitResult
-    ) throws {
+    ) async throws {
         guard schema == ElicitationRequestSchema.self else {
             throw MCPClientError(
                 message: "Unsupported request schema. Only ElicitationRequestSchema is supported."
@@ -403,18 +369,15 @@ internal final class DefaultMCPClient: MCPClient, @unchecked Sendable {
         case "initialize":
             break
         case "tools/list", "tools/call":
-            let hasTools = lock.withLock { serverCapabilities.tools != nil }
-            guard hasTools else {
+            guard serverCapabilities.tools != nil else {
                 throw MCPClientError(message: "Server does not support tools")
             }
         case "resources/list", "resources/read", "resources/templates/list":
-            let hasResources = lock.withLock { serverCapabilities.resources != nil }
-            guard hasResources else {
+            guard serverCapabilities.resources != nil else {
                 throw MCPClientError(message: "Server does not support resources")
             }
         case "prompts/list", "prompts/get":
-            let hasPrompts = lock.withLock { serverCapabilities.prompts != nil }
-            guard hasPrompts else {
+            guard serverCapabilities.prompts != nil else {
                 throw MCPClientError(message: "Server does not support prompts")
             }
         default:
@@ -428,85 +391,70 @@ internal final class DefaultMCPClient: MCPClient, @unchecked Sendable {
         additionalParams: [String: JSONValue] = [:],
         options: RequestOptions? = nil
     ) async throws -> T {
-        try await withCheckedThrowingContinuation { continuation in
-            let closed = lock.withLock { isClosed }
-            if closed {
-                continuation.resume(throwing: MCPClientError(
-                    message: "Attempted to send a request from a closed client"
-                ))
-                return
-            }
+        let abortSignal = options?.signal
+        if let abortSignal, abortSignal() {
+            throw AbortError(message: "Request was aborted")
+        }
 
-            let abortSignal = options?.signal
-            if let abortSignal, abortSignal() {
-                continuation.resume(throwing: AbortError(message: "Request was aborted"))
-                return
-            }
-
-            do {
-                try assertCapability(method: method)
-            } catch {
-                continuation.resume(throwing: error)
-                return
-            }
-
-            let messageId = lock.withLock { () -> Int in
-                let id = requestMessageId
-                requestMessageId += 1
-                return id
-            }
-
-            var requestParams: [String: JSONValue] = [:]
-            if let params, case .object(let paramDict) = params {
-                requestParams = paramDict
-            }
-            for (key, value) in additionalParams {
-                requestParams[key] = value
-            }
-
-            let jsonrpcRequest = JSONRPCRequest(
-                id: .int(messageId),
-                method: method,
-                params: requestParams.isEmpty ? nil : .object(requestParams)
+        guard !isClosed else {
+            throw MCPClientError(
+                message: "Attempted to send a request from a closed client"
             )
+        }
 
-            lock.withLock {
-                responseHandlers[messageId] = { [weak self] result in
-                    guard let self else {
-                        continuation.resume(throwing: MCPClientError(message: "Client was deallocated"))
-                        return
+        try assertCapability(method: method)
+
+        let messageId = requestMessageId
+        requestMessageId += 1
+
+        var requestParams: [String: JSONValue] = [:]
+        if let params, case .object(let paramDict) = params {
+            requestParams = paramDict
+        }
+        for (key, value) in additionalParams {
+            requestParams[key] = value
+        }
+
+        let jsonrpcRequest = JSONRPCRequest(
+            id: .int(messageId),
+            method: method,
+            params: requestParams.isEmpty ? nil : .object(requestParams)
+        )
+
+        return try await withCheckedThrowingContinuation { continuation in
+            responseHandlers[messageId] = { result in
+                if let abortSignal, abortSignal() {
+                    continuation.resume(throwing: AbortError(message: "Request was aborted"))
+                    return
+                }
+
+                switch result {
+                case .success(let response):
+                    do {
+                        let decoded = try Self.decodeResult(response.result, as: T.self)
+                        continuation.resume(returning: decoded)
+                    } catch {
+                        continuation.resume(throwing: MCPClientError(
+                            message: "Failed to parse server response",
+                            cause: error
+                        ))
                     }
 
-                    if let abortSignal, abortSignal() {
-                        continuation.resume(throwing: AbortError(message: "Request was aborted"))
-                        return
-                    }
-
-                    switch result {
-                    case .success(let response):
-                        do {
-                            let decoded = try self.decodeResult(response.result, as: T.self)
-                            continuation.resume(returning: decoded)
-                        } catch {
-                            continuation.resume(throwing: MCPClientError(
-                                message: "Failed to parse server response",
-                                cause: error
-                            ))
-                        }
-
-                    case .failure(let error):
-                        continuation.resume(throwing: error)
-                    }
+                case .failure(let error):
+                    continuation.resume(throwing: error)
                 }
             }
 
-            Task {
+            Task { [weak self] in
+                guard let self else {
+                    continuation.resume(throwing: MCPClientError(message: "Client was deallocated"))
+                    return
+                }
+
                 do {
-                    try await transport.send(message: .request(jsonrpcRequest))
+                    try await self.transport.send(message: .request(jsonrpcRequest))
                 } catch {
-                    let _ = self.lock.withLock {
-                        self.responseHandlers.removeValue(forKey: messageId)
-                    }
+                    await self.removeResponseHandler(for: messageId)
                     continuation.resume(throwing: error)
                 }
             }
@@ -900,7 +848,7 @@ internal final class DefaultMCPClient: MCPClient, @unchecked Sendable {
 
     // MARK: - Decoding helpers
 
-    private func decodeResult<T: Decodable>(_ result: JSONValue, as type: T.Type) throws -> T {
+    private static func decodeResult<T: Decodable>(_ result: JSONValue, as type: T.Type) throws -> T {
         let data = try JSONSerialization.data(withJSONObject: result.toAnyObject(), options: [])
         return try JSONDecoder().decode(T.self, from: data)
     }
@@ -911,7 +859,7 @@ internal final class DefaultMCPClient: MCPClient, @unchecked Sendable {
         return try jsonValue(from: jsonObject)
     }
 
-    private func callToolResultToJSON(_ result: CallToolResult) throws -> JSONValue {
+    private static func callToolResultToJSON(_ result: CallToolResult) throws -> JSONValue {
         let data = try JSONEncoder().encode(result)
         let jsonObject = try JSONSerialization.jsonObject(with: data, options: [])
         var jsonValueResult = try jsonValue(from: jsonObject)
@@ -929,19 +877,10 @@ internal final class DefaultMCPClient: MCPClient, @unchecked Sendable {
     // MARK: - Event handlers
 
     private func handleClose() {
-        let (shouldHandle, handlers) = lock.withLock { () -> (Bool, [Int: @Sendable (Result<JSONRPCResponse, Error>) -> Void]) in
-            guard !isClosed else {
-                return (false, [:])
-            }
-
-            isClosed = true
-            let handlers = responseHandlers
-            responseHandlers.removeAll()
-            return (true, handlers)
-        }
-
-        guard shouldHandle else { return }
-
+        guard !isClosed else { return }
+        isClosed = true
+        let handlers = responseHandlers
+        responseHandlers.removeAll()
         let error = MCPClientError(message: "Connection closed")
         for handler in handlers.values {
             handler(.failure(error))
@@ -976,9 +915,7 @@ internal final class DefaultMCPClient: MCPClient, @unchecked Sendable {
             messageId = id
         }
 
-        let handler = lock.withLock {
-            responseHandlers.removeValue(forKey: messageId)
-        }
+        let handler = responseHandlers.removeValue(forKey: messageId)
 
         guard let handler else {
             handleError(MCPClientError(
@@ -1003,9 +940,7 @@ internal final class DefaultMCPClient: MCPClient, @unchecked Sendable {
             messageId = intId
         }
 
-        let handler = lock.withLock {
-            responseHandlers.removeValue(forKey: messageId)
-        }
+        let handler = responseHandlers.removeValue(forKey: messageId)
 
         guard let handler else {
             handleError(MCPClientError(
@@ -1015,6 +950,41 @@ internal final class DefaultMCPClient: MCPClient, @unchecked Sendable {
         }
 
         handler(.failure(error))
+    }
+
+    private func removeResponseHandler(for messageId: Int) {
+        responseHandlers.removeValue(forKey: messageId)
+    }
+
+    private func handleTransportEvent(_ event: MCPTransportEvent) async {
+        switch event {
+        case .close:
+            handleClose()
+
+        case .error(let error):
+            handleError(error)
+
+        case .message(let message):
+            switch message {
+            case .request(let request):
+                await onRequestMessage(request)
+
+            case .notification:
+                handleError(MCPClientError(message: "Unsupported message type"))
+
+            case .response(let response):
+                handleResponse(.success(response))
+
+            case .error(let errorResponse):
+                let error = MCPClientError(
+                    message: errorResponse.error.message,
+                    cause: nil,
+                    data: errorResponse.error.data,
+                    code: errorResponse.error.code
+                )
+                handleErrorResponse(errorResponse.id, error: error)
+            }
+        }
     }
 }
 

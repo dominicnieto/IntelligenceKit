@@ -15,8 +15,19 @@ public func createUIMessageStream<Message: UIMessageConvertible>(
     onFinish: UIMessageStreamOnFinishCallback<Message>? = nil,
     generateId: @escaping IDGenerator = generateID
 ) -> AsyncThrowingStream<AnyUIMessageChunk, Error> {
-    let state = UIMessageStreamState(errorMapper: mapError)
-    let rawStream = state.makeStream()
+    let (rawStream, continuation) = AsyncThrowingStream.makeStream(
+        of: AnyUIMessageChunk.self,
+        throwing: Error.self
+    )
+    let state = UIMessageStreamCoordinator(
+        continuation: continuation,
+        errorMapper: mapError
+    )
+    continuation.onTermination = { termination in
+        Task {
+            await state.handleTermination(termination)
+        }
+    }
     let writer = DefaultUIMessageStreamWriter<Message>(state: state, errorMapper: mapError)
 
     // Tie the execution task lifetime to the resulting stream to avoid leaked tasks
@@ -26,9 +37,9 @@ public func createUIMessageStream<Message: UIMessageConvertible>(
         do {
             try await execute(writer)
         } catch {
-            state.emitError(error)
+            await state.emitError(error)
         }
-        state.requestFinish()
+        await state.requestFinish()
     }
 
     let finishHandler: ErrorHandler = { error in
@@ -72,23 +83,23 @@ public func createUIMessageStream<Message: UIMessageConvertible>(
 public struct DefaultUIMessageStreamWriter<MessageType: UIMessageConvertible>: UIMessageStreamWriter {
     public typealias Message = MessageType
 
-    private let state: UIMessageStreamState
+    private let state: UIMessageStreamCoordinator
     private let errorMapper: @Sendable (Error) -> String
 
     init(
-        state: UIMessageStreamState,
+        state: UIMessageStreamCoordinator,
         errorMapper: @escaping @Sendable (Error) -> String
     ) {
         self.state = state
         self.errorMapper = errorMapper
     }
 
-    public func write(_ part: AnyUIMessageChunk) {
-        state.enqueue(part)
+    public func write(_ part: AnyUIMessageChunk) async {
+        await state.emit(part)
     }
 
-    public func merge(_ stream: AsyncIterableStream<AnyUIMessageChunk>) {
-        state.merge(stream: stream, errorMapper: errorMapper)
+    public func merge(_ stream: AsyncIterableStream<AnyUIMessageChunk>) async {
+        await state.merge(stream: stream, errorMapper: errorMapper)
     }
 
     public var onError: ErrorHandler? {
@@ -100,127 +111,80 @@ public struct DefaultUIMessageStreamWriter<MessageType: UIMessageConvertible>: U
 
 // MARK: - Internal State
 
-final class UIMessageStreamState {
-    private let lock = NSLock()
-    private var continuation: AsyncThrowingStream<AnyUIMessageChunk, Error>.Continuation?
+actor UIMessageStreamCoordinator {
+    private let continuation: AsyncThrowingStream<AnyUIMessageChunk, Error>.Continuation
     private var isFinished = false
     private var finishRequested = false
     private var activeMergeCount = 0
     private var mergeTasks: [UUID: Task<Void, Never>] = [:]
     private let errorMapper: @Sendable (Error) -> String
 
-    init(errorMapper: @escaping @Sendable (Error) -> String) {
+    init(
+        continuation: AsyncThrowingStream<AnyUIMessageChunk, Error>.Continuation,
+        errorMapper: @escaping @Sendable (Error) -> String
+    ) {
+        self.continuation = continuation
         self.errorMapper = errorMapper
     }
 
-    func makeStream() -> AsyncThrowingStream<AnyUIMessageChunk, Error> {
-        AsyncThrowingStream { continuation in
-            self.setContinuation(continuation)
-
-            continuation.onTermination = { termination in
-                self.handleTermination(termination)
-            }
-        }
-    }
-
-    func enqueue(_ chunk: AnyUIMessageChunk) {
-        lock.lock()
-        guard !isFinished else {
-            lock.unlock()
-            return
-        }
-        let continuation = self.continuation
-        lock.unlock()
-        continuation?.yield(chunk)
+    func emit(_ chunk: AnyUIMessageChunk) {
+        guard !isFinished else { return }
+        continuation.yield(chunk)
     }
 
     func emitError(_ error: Error) {
-        enqueue(.error(errorText: errorMapper(error)))
+        emit(.error(errorText: errorMapper(error)))
     }
 
     func merge(
         stream: AsyncIterableStream<AnyUIMessageChunk>,
         errorMapper: @escaping @Sendable (Error) -> String
     ) {
+        guard !isFinished else { return }
+
         let identifier = UUID()
+        activeMergeCount += 1
         let task = Task {
             defer {
-                self.mergeFinished(id: identifier)
+                Task {
+                    self.mergeFinished(id: identifier)
+                }
             }
 
             var iterator = stream.makeAsyncIterator()
             do {
                 while let value = try await iterator.next() {
-                    self.enqueue(value)
+                    self.emit(value)
                 }
             } catch is CancellationError {
                 // Cancellation propagates silently.
             } catch {
-                self.enqueue(.error(errorText: errorMapper(error)))
+                self.emit(.error(errorText: errorMapper(error)))
             }
         }
 
-        if !registerMerge(task: task, id: identifier) {
-            task.cancel()
-        }
+        mergeTasks[identifier] = task
     }
 
     func requestFinish() {
-        let shouldFinish: Bool
-        lock.lock()
         finishRequested = true
-        shouldFinish = !isFinished && activeMergeCount == 0
-        lock.unlock()
-
-        if shouldFinish {
+        if !isFinished && activeMergeCount == 0 {
             finish()
         }
-    }
-
-    // MARK: - Private helpers
-
-    private func setContinuation(
-        _ continuation: AsyncThrowingStream<AnyUIMessageChunk, Error>.Continuation
-    ) {
-        lock.lock()
-        guard self.continuation == nil else {
-            lock.unlock()
-            return
-        }
-        self.continuation = continuation
-        lock.unlock()
-    }
-
-    private func registerMerge(task: Task<Void, Never>, id: UUID) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-
-        if isFinished {
-            return false
-        }
-
-        activeMergeCount += 1
-        mergeTasks[id] = task
-        return true
     }
 
     private func mergeFinished(id: UUID) {
-        let shouldFinish: Bool
-
-        lock.lock()
-        mergeTasks[id] = nil
+        let task = mergeTasks.removeValue(forKey: id)
+        task?.cancel()
         if activeMergeCount > 0 {
             activeMergeCount -= 1
         }
-        shouldFinish = finishRequested && !isFinished && activeMergeCount == 0
-        lock.unlock()
-
-        if shouldFinish {
+        if finishRequested && !isFinished && activeMergeCount == 0 {
             finish()
         }
     }
 
-    private func handleTermination(
+    func handleTermination(
         _ termination: AsyncThrowingStream<AnyUIMessageChunk, Error>.Continuation.Termination
     ) {
         switch termination {
@@ -235,29 +199,18 @@ final class UIMessageStreamState {
     }
 
     private func finish() {
-        lock.lock()
-        guard !isFinished else {
-            lock.unlock()
-            return
-        }
+        guard !isFinished else { return }
         isFinished = true
-        let continuation = self.continuation
-        self.continuation = nil
-        lock.unlock()
-
-        continuation?.finish()
+        continuation.finish()
         cancelMerges()
     }
 
     private func cancelMerges() {
-        lock.lock()
-        let tasks = mergeTasks.values
+        let tasks = Array(mergeTasks.values)
         mergeTasks.removeAll()
-        lock.unlock()
+        activeMergeCount = 0
         for task in tasks {
             task.cancel()
         }
     }
 }
-
-extension UIMessageStreamState: @unchecked Sendable {}

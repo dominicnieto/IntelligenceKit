@@ -12,8 +12,6 @@ import Foundation
  Tests both language model and embedding model resolution, including:
  - V3 model pass-through
  - V2 to V3 adaptation
- - String ID resolution with global provider
- - String ID resolution without global provider (should use gateway/default)
  */
 
 @Suite("resolveLanguageModel Tests")
@@ -65,34 +63,6 @@ struct ResolveLanguageModelTests {
         // Stream is not nil (it's a non-optional AsyncThrowingStream)
     }
 
-    // MARK: - String Resolution Tests
-
-    @Test("when a string is provided and global provider is not set - should throw error")
-    func throwsWhenNoGlobalProvider() async throws {
-        globalDefaultProvider = nil
-        try await withGlobalProviderDisabled {
-            #expect(throws: NoSuchProviderError.self) {
-                try resolveLanguageModel(.string("test-model-id"))
-            }
-        }
-    }
-
-    @Test("when a string is provided and global provider is set - should return model from global provider")
-    func resolvesFromGlobalProvider() async throws {
-        // Set up global provider with mock model
-        let mockModel = MockLanguageModelV3(
-            provider: "global-test-provider",
-            modelId: "actual-test-model-id"
-        )
-
-        let provider = customProvider(languageModels: ["test-model-id": mockModel])
-        let resolvedModel = try withGlobalProvider(provider) {
-            try resolveLanguageModel(.string("test-model-id"))
-        }
-
-        #expect(resolvedModel.provider == "global-test-provider")
-        #expect(resolvedModel.modelId == "actual-test-model-id")
-    }
 }
 
 @Suite("resolveEmbeddingModel Tests")
@@ -136,35 +106,6 @@ struct ResolveEmbeddingModelTests {
         #expect(resolvedModel.specificationVersion == "v3")
     }
 
-    // MARK: - String Resolution Tests
-
-    @Test("when a string is provided and global provider is not set - should throw error")
-    func throwsWhenNoGlobalProvider() async throws {
-        // Ensure no global provider is set and isolate from parallel suites
-        globalDefaultProvider = nil
-        try await withGlobalProviderDisabled {
-            #expect(throws: NoSuchProviderError.self) {
-                let _: any EmbeddingModelV3<String> = try resolveEmbeddingModel(.string("test-model-id"))
-            }
-        }
-    }
-
-    @Test("when a string is provided and global provider is set - should return model from global provider")
-    func resolvesFromGlobalProvider() async throws {
-        // Set up global provider with mock model
-        let mockModel = MockEmbeddingModelV3(
-            provider: "global-test-provider",
-            modelId: "actual-test-model-id"
-        )
-
-        let provider = customProvider(textEmbeddingModels: ["test-model-id": mockModel])
-        let resolvedModel: any EmbeddingModelV3<String> = try withGlobalProvider(provider) {
-            try resolveEmbeddingModel(.string("test-model-id"))
-        }
-
-        #expect(resolvedModel.provider == "global-test-provider")
-        #expect(resolvedModel.modelId == "actual-test-model-id")
-    }
 }
 
 // MARK: - Mock Models

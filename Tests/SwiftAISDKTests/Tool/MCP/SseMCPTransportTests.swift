@@ -117,7 +117,8 @@ struct SseMCPTransportTests {
         let transport = try SseMCPTransport(config: MCPTransportConfig(url: sseUrl), session: session)
 
         let messagePromise = createResolvablePromise(of: JSONRPCMessage.self)
-        transport.onmessage = { msg in
+        await transport.setEventHandler { event in
+            guard case .message(let msg) = event else { return }
             messagePromise.resolve(msg)
         }
 
@@ -184,7 +185,8 @@ struct SseMCPTransportTests {
         let transport = try SseMCPTransport(config: MCPTransportConfig(url: sseUrl), session: session)
 
         let errorPromise = createResolvablePromise(of: Error.self)
-        transport.onerror = { err in
+        await transport.setEventHandler { event in
+            guard case .error(let err) = event else { return }
             errorPromise.resolve(err)
         }
 
@@ -200,8 +202,7 @@ struct SseMCPTransportTests {
         controller.write("event: message\ndata: {\"foo\":\"bar\"}\n\n")
 
         let error = try await errorPromise.task.value
-        #expect(MCPClientError.isInstance(error))
-        let message = (error as? MCPClientError)?.message ?? String(describing: error)
+        let message = String(describing: error)
         #expect(message.contains("Failed to parse message"))
 
         try await transport.close()
@@ -316,7 +317,8 @@ struct SseMCPTransportTests {
         let transport = try SseMCPTransport(config: MCPTransportConfig(url: sseUrl), session: session)
 
         let errorPromise = createResolvablePromise(of: Error.self)
-        transport.onerror = { error in
+        await transport.setEventHandler { event in
+            guard case .error(let error) = event else { return }
             errorPromise.resolve(error)
         }
 
@@ -340,8 +342,7 @@ struct SseMCPTransportTests {
         // First send fails but does not throw; it reports error via onerror.
         try await transport.send(message: message)
         let error = try await errorPromise.task.value
-        #expect(MCPClientError.isInstance(error))
-        let messageText = (error as? MCPClientError)?.message ?? String(describing: error)
+        let messageText = String(describing: error)
         #expect(messageText.contains("POSTing to endpoint"))
 
         // Transport should remain connected: a subsequent send should still be attempted.

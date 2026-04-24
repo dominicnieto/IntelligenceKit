@@ -452,14 +452,20 @@ public final class DefaultStreamTextResult<OutputValue: Sendable, PartialOutputV
         self.pipelineTask = Task {
             let baseStream = AsyncThrowingStream<TextStreamPart, Error> { continuation in
                 let task = Task {
-                    let inner = await actor.fullStream()
-                    do {
-                        for try await value in inner {
-                            continuation.yield(value)
+                    await withTaskCancellationHandler {
+                        let inner = await actor.fullStream()
+                        async let runLoop: Void = actor.runIfNeeded()
+                        do {
+                            for try await value in inner {
+                                continuation.yield(value)
+                            }
+                            continuation.finish()
+                        } catch {
+                            continuation.finish(throwing: error)
                         }
-                        continuation.finish()
-                    } catch {
-                        continuation.finish(throwing: error)
+                        await runLoop
+                    } onCancel: {
+                        Task { await actor.requestStop() }
                     }
                 }
                 continuation.onTermination = { _ in task.cancel() }

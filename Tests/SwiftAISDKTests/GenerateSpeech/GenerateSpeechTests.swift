@@ -140,53 +140,53 @@ struct GenerateSpeechTests {
 
     @Test("should call logWarnings with the correct warnings")
     func shouldCallLogWarningsWithWarnings() async throws {
-        let expectedWarnings: [SharedV3Warning] = [
-            .other(message: "Setting is not supported"),
-            .unsupported(feature: "voice", details: "Voice parameter not supported")
-        ]
+        try await LogWarningsTestLock.shared.withLock {
+            let expectedWarnings: [SharedV3Warning] = [
+                .other(message: "Setting is not supported"),
+                .unsupported(feature: "voice", details: "Voice parameter not supported")
+            ]
 
-        let previousLogger = logWarningsForGenerateSpeech
-        defer { logWarningsForGenerateSpeech = previousLogger }
+            let recordedWarnings = ValueBox([[Warning]]())
+            logWarningsObserver = { warnings in
+                recordedWarnings.value.append(warnings)
+            }
+            defer { logWarningsObserver = nil }
 
-        let recordedWarnings = ValueBox([[Warning]]())
-        logWarningsForGenerateSpeech = { warnings in
-            recordedWarnings.value.append(warnings)
+            let model = MockSpeechModelV3 { _ in
+                makeMockResult(audio: mockAudioFile, warnings: expectedWarnings)
+            }
+
+            _ = try await generateSpeech(
+                model: model,
+                text: sampleText
+            )
+
+            #expect(recordedWarnings.value.count == 1)
+            let expectedLogged = expectedWarnings.map { Warning.speechModel($0) }
+            #expect(recordedWarnings.value.first == expectedLogged)
         }
-
-        let model = MockSpeechModelV3 { _ in
-            makeMockResult(audio: mockAudioFile, warnings: expectedWarnings)
-        }
-
-        _ = try await generateSpeech(
-            model: model,
-            text: sampleText
-        )
-
-        #expect(recordedWarnings.value.count == 1)
-        let expectedLogged = try expectedWarnings.map { Warning.speechModel($0) }
-        #expect(recordedWarnings.value.first == expectedLogged)
     }
 
     @Test("should call logWarnings with empty array when no warnings are present")
     func shouldCallLogWarningsWithEmptyArray() async throws {
-        let previousLogger = logWarningsForGenerateSpeech
-        defer { logWarningsForGenerateSpeech = previousLogger }
+        try await LogWarningsTestLock.shared.withLock {
+            let recordedWarnings = ValueBox<[Warning]?>(nil)
+            logWarningsObserver = { warnings in
+                recordedWarnings.value = warnings
+            }
+            defer { logWarningsObserver = nil }
 
-        let recordedWarnings = ValueBox<[Warning]?>(nil)
-        logWarningsForGenerateSpeech = { warnings in
-            recordedWarnings.value = warnings
+            let model = MockSpeechModelV3 { _ in
+                makeMockResult(audio: mockAudioFile, warnings: [])
+            }
+
+            _ = try await generateSpeech(
+                model: model,
+                text: sampleText
+            )
+
+            #expect(recordedWarnings.value?.isEmpty == true)
         }
-
-        let model = MockSpeechModelV3 { _ in
-            makeMockResult(audio: mockAudioFile, warnings: [])
-        }
-
-        _ = try await generateSpeech(
-            model: model,
-            text: sampleText
-        )
-
-        #expect(recordedWarnings.value?.isEmpty == true)
     }
 
     @Test("should return the audio data")

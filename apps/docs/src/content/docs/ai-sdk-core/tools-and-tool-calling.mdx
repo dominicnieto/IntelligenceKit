@@ -389,7 +389,7 @@ let stream = createUIMessageStream { writer in
     messages: messages,
     tools: ["progress": progressTool.tool]
   )
-  writer.merge(result.toUIMessageStream())
+  await writer.merge(result.toUIMessageStream())
 }
 let response = createUIMessageStreamResponse(stream: stream)
 ```

@@ -6,12 +6,13 @@ Source review: `.context/attachments/pasted_text_2026-04-24_09-17-59.txt`
 
 - Open tracker items: `2`
 - Lower-priority follow-ups: `4`
-- `@unchecked Sendable` declarations remaining in `Sources/`: `143`
+- `@unchecked Sendable` declarations remaining in `Sources/`: `138`
 - `nonisolated(unsafe)` declarations remaining in `Sources/`: `5`
 
 Notes:
 - The raw `@unchecked Sendable` count is broad and includes type-erasure / opaque payload wrappers inherited from the port; it is a surface-area counter, not a severity ranking.
 - The `nonisolated(unsafe)` count is small and concentrated in the warning logging subsystem.
+- Hard API breaks are acceptable if they produce a cleaner Swift-native concurrency model.
 
 Status legend:
 - `[x]` done
@@ -55,13 +56,28 @@ Status legend:
 - Detailed audit: `todo/unchecked-sendable-audit.md`
 - Files:
   - `Sources/SwiftAISDK/Streams/AsyncIterableStream.swift`
-  - `Sources/SwiftAISDK/...` `AnySendableError`
+  - `Sources/SwiftAISDK/UI/Processing/ProcessUIMessageStream.swift`
+  - `Sources/SwiftAISDK/UIMessageStream/CreateUIMessageStream.swift`
+  - `Sources/SwiftAISDK/UIMessageStream/ReadUIMessageStream.swift`
+  - `Sources/SwiftAISDK/UIMessageStream/TeeAsyncThrowingStream.swift`
+  - remaining broader stream / pipeline / transport work
 - Problem:
-  - some `@unchecked Sendable` annotations look unnecessary
-  - `EventSourceParser` relied on a serial-access invariant that should be documented or enforced
+  - port-shaped stream/runtime controllers were still using mutable classes, locks, and sync mutation APIs
+  - some `@unchecked Sendable` annotations were unnecessary facades over already-isolated state
 - Outcome:
   - the `EventSourceParser` part of this item was resolved by removing that module entirely
-  - remaining `@unchecked Sendable` review still applies elsewhere, but the SSE parser-specific concern is gone
+  - completed the first architecture-first refactor slice for the UI/stream runtime:
+    - `UIMessageStreamWriter.write(_:)` and `.merge(_:)` are now async-first mutation APIs
+    - `StreamingUIMessageState` is now actor-owned state instead of a shared mutable class
+    - `CreateUIMessageStream` and `ReadUIMessageStream` now use actor coordinators instead of lock-backed controllers
+    - `teeAsyncThrowingStream` now uses an actor distributor
+    - `AsyncIterableStream` is now a plain `Sendable` struct; the remaining unchecked surface in that file is `AnySendableError`
+  - focused suites covering create/read/process/finish/UI stream behavior and `AsyncIterableStream` passed after the refactor
+  - remaining `@unchecked Sendable` review still applies elsewhere, but this establishes the reusable pattern for the rest of item 6:
+    - mutable runtime state behind one isolation boundary
+    - async mutation edges instead of sync methods hiding locks
+    - thin outer facades / value wrappers
+    - centralized task, continuation, and cancellation ownership
   
 ### [ ] 7. Structured vs unstructured task cleanup
 - Problem: several places still use `Task { ... }` as an isolation hop / background follow-up where structured concurrency may be clearer and safer.
@@ -130,5 +146,9 @@ Next target: **Finding 6 — `@unchecked Sendable` cleanup / invariant tightenin
 
 Why this is next:
 - it is now the largest remaining migration surface directly tied to Swift 6.2 concurrency correctness
-- the `StreamTextActor` task-structure item is complete, so the next highest-value cleanup is reducing unchecked sendability inherited from the port
+- the first UI/stream architecture slice is complete, so the next highest-value cleanup is applying the same pattern to the remaining mutable runtime-state subsystems
 - the warning-observer todo is real but test-only and not the main production concurrency migration risk
+
+Immediate follow-up within item 6:
+- MCP client / transport state machines
+- remaining stream / pipeline coordinators such as `RunToolsTransformation`

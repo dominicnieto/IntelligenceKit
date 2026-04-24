@@ -93,7 +93,9 @@ public func handleUIMessageStreamFinish<Message: UIMessageConvertible>(
     let processedStream = processUIMessageStreamInternal(
         stream: idInjectedStream,
         runUpdateMessageJob: runUpdateMessageJob,
-        onError: onError,
+        onError: { error in
+            onError(error)
+        },
         onChunk: { chunk in
             // Mirror upstream: `onStepFinish` runs as the stream processes a `finish-step` chunk.
             if case .finishStep = chunk {
@@ -153,7 +155,8 @@ private actor FinishInvoker<Message: UIMessageConvertible> {
         guard !called else { return }
         called = true
 
-        let responseMessage = state.message.clone()
+        let snapshot = await state.snapshot()
+        let responseMessage = snapshot.message
         let isContinuation = responseMessage.id == lastAssistantMessage?.id
 
         var messages = originalMessages.map { $0.clone() }
@@ -173,7 +176,7 @@ private actor FinishInvoker<Message: UIMessageConvertible> {
                 isContinuation: isContinuation,
                 isAborted: await isAborted(),
                 responseMessage: responseMessage,
-                finishReason: state.finishReason
+                finishReason: snapshot.finishReason
             )
         )
     }
@@ -201,7 +204,7 @@ private actor StepFinishInvoker<Message: UIMessageConvertible> {
     }
 
     func call() async {
-        let responseMessage = state.message.clone()
+        let responseMessage = await state.messageSnapshot()
         let isContinuation = responseMessage.id == lastAssistantMessage?.id
 
         var messages = originalMessages.map { $0.clone() }

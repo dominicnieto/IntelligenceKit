@@ -8,72 +8,131 @@ import Foundation
 func teeAsyncThrowingStream<Element: Sendable>(
     _ source: AsyncThrowingStream<Element, Error>
 ) -> (AsyncThrowingStream<Element, Error>, AsyncThrowingStream<Element, Error>) {
-    let distributor = TeeDistributor<Element>()
+    let distributor = TeeDistributor<Element>(expectedConsumerCount: 2)
 
-    let streamA = distributor.makeStream()
-    let streamB = distributor.makeStream()
+    let streamA = makeTeeStream(distributor: distributor)
+    let streamB = makeTeeStream(distributor: distributor)
 
     let pumpTask = Task {
         do {
             for try await value in source {
-                distributor.broadcast(value)
+                await distributor.broadcast(value)
             }
-            distributor.finish(error: nil)
+            await distributor.finish(error: nil)
         } catch is CancellationError {
-            distributor.finish(error: nil)
+            await distributor.finish(error: nil)
         } catch {
-            distributor.finish(error: error)
+            await distributor.finish(error: error)
         }
     }
 
-    distributor.register(task: pumpTask)
+    Task {
+        await distributor.register(task: pumpTask)
+    }
 
     return (streamA, streamB)
 }
 
+private func makeTeeStream<Element: Sendable>(
+    distributor: TeeDistributor<Element>
+) -> AsyncThrowingStream<Element, Error> {
+    let identifier = UUID()
+    let (stream, continuation) = AsyncThrowingStream.makeStream(
+        of: Element.self,
+        throwing: Error.self
+    )
+
+    continuation.onTermination = { _ in
+        Task {
+            await distributor.removeContinuation(id: identifier)
+        }
+    }
+
+    Task {
+        await distributor.addContinuation(id: identifier, continuation: continuation)
+    }
+
+    return stream
+}
+
 // MARK: - Distributor
 
-private final class TeeDistributor<Element: Sendable> {
-    private let lock = NSLock()
+private actor TeeDistributor<Element: Sendable> {
+    private let expectedConsumerCount: Int
+
     private var continuations: [UUID: AsyncThrowingStream<Element, Error>.Continuation] = [:]
+    private var pendingValues: [Element] = []
     private var finished = false
     private var finishError: Error?
     private var pumpTask: Task<Void, Never>?
 
-    func register(task: Task<Void, Never>) {
-        lock.lock()
-        pumpTask = task
-        lock.unlock()
+    init(expectedConsumerCount: Int) {
+        self.expectedConsumerCount = expectedConsumerCount
     }
 
-    func makeStream() -> AsyncThrowingStream<Element, Error> {
-        AsyncThrowingStream { continuation in
-            let id = UUID()
+    func register(task: Task<Void, Never>) {
+        pumpTask = task
+    }
 
-            addContinuation(id: id, continuation: continuation)
+    func addContinuation(
+        id: UUID,
+        continuation: AsyncThrowingStream<Element, Error>.Continuation
+    ) {
+        if let error = finishError {
+            continuation.finish(throwing: error)
+            return
+        }
 
-            continuation.onTermination = { termination in
-                switch termination {
-                case .cancelled, .finished:
-                    self.removeContinuation(id: id)
-                @unknown default:
-                    self.removeContinuation(id: id)
-                }
-            }
+        if finished {
+            continuation.finish()
+            return
+        }
+
+        continuations[id] = continuation
+
+        for value in pendingValues {
+            continuation.yield(value)
+        }
+
+        if continuations.count >= expectedConsumerCount {
+            pendingValues.removeAll(keepingCapacity: false)
+        }
+    }
+
+    func removeContinuation(id: UUID) {
+        continuations[id] = nil
+        let shouldTerminate = continuations.isEmpty && !finished
+
+        if shouldTerminate {
+            finish(error: nil)
         }
     }
 
     func broadcast(_ value: Element) {
-        let continuations = currentContinuations()
-        guard !continuations.isEmpty else { return }
-        for continuation in continuations {
+        guard !finished else { return }
+
+        if continuations.count < expectedConsumerCount {
+            pendingValues.append(value)
+        }
+
+        for continuation in continuations.values {
             continuation.yield(value)
         }
     }
 
     func finish(error: Error?) {
-        let continuations = markFinished(with: error)
-        for continuation in continuations {
+        guard !finished else { return }
+
+        finished = true
+        finishError = error
+        let activeContinuations = Array(continuations.values)
+        continuations.removeAll()
+        pendingValues.removeAll(keepingCapacity: false)
+        let task = pumpTask
+        pumpTask = nil
+        task?.cancel()
+
+        for continuation in activeContinuations {
             if let error {
                 continuation.finish(throwing: error)
             } else {
@@ -81,72 +140,4 @@ private final class TeeDistributor<Element: Sendable> {
             }
         }
     }
-
-    // MARK: - Private helpers
-
-    private func addContinuation(
-        id: UUID,
-        continuation: AsyncThrowingStream<Element, Error>.Continuation
-    ) {
-        lock.lock()
-        if let error = finishError {
-            lock.unlock()
-            continuation.finish(throwing: error)
-            return
-        }
-
-        if finished {
-            lock.unlock()
-            continuation.finish()
-            return
-        }
-
-        continuations[id] = continuation
-        lock.unlock()
-    }
-
-    private func removeContinuation(id: UUID) {
-        lock.lock()
-        continuations[id] = nil
-        let shouldTerminate = continuations.isEmpty && !finished
-        lock.unlock()
-
-        if shouldTerminate {
-            finish(error: nil)
-        }
-    }
-
-    private func currentContinuations()
-        -> [AsyncThrowingStream<Element, Error>.Continuation] {
-        lock.lock()
-        if finished {
-            lock.unlock()
-            return []
-        }
-        let values = Array(continuations.values)
-        lock.unlock()
-        return values
-    }
-
-    private func markFinished(with error: Error?)
-        -> [AsyncThrowingStream<Element, Error>.Continuation] {
-        lock.lock()
-        if finished {
-            lock.unlock()
-            return []
-        }
-
-        finished = true
-        finishError = error
-        let values = Array(continuations.values)
-        continuations.removeAll()
-        let task = pumpTask
-        pumpTask = nil
-        lock.unlock()
-
-        task?.cancel()
-        return values
-    }
 }
-
-extension TeeDistributor: @unchecked Sendable {}

@@ -18,28 +18,38 @@ public func readUIMessageStream<Message: UIMessageConvertible>(
         messageId: message?.id ?? ""
     )
 
-    let output = AsyncThrowingStream<Message, Error> { continuation in
-        let controller = ReadUIMessageStreamController(
-            state: state,
-            continuation: continuation,
-            terminateOnError: terminateOnError,
-            onError: onError
-        )
-        controller.start(stream: stream)
+    let (output, continuation) = AsyncThrowingStream.makeStream(
+        of: Message.self,
+        throwing: Error.self
+    )
+    let coordinator = ReadUIMessageStreamCoordinator(
+        state: state,
+        continuation: continuation,
+        terminateOnError: terminateOnError,
+        onError: onError
+    )
+
+    continuation.onTermination = { _ in
+        Task {
+            await coordinator.cancel()
+        }
+    }
+
+    Task {
+        await coordinator.start(stream: stream)
     }
 
     return createAsyncIterableStream(source: output)
 }
 
-// MARK: - Controller
+// MARK: - Coordinator
 
-private final class ReadUIMessageStreamController<Message: UIMessageConvertible>: @unchecked Sendable {
+private actor ReadUIMessageStreamCoordinator<Message: UIMessageConvertible> {
     private let state: StreamingUIMessageState<Message>
+    private let continuation: AsyncThrowingStream<Message, Error>.Continuation
     private let terminateOnError: Bool
     private let errorHandler: (@Sendable (Error) -> Void)?
-    private let lock = NSLock()
 
-    private var continuation: AsyncThrowingStream<Message, Error>.Continuation?
     private var hasErrored = false
     private var consumeTask: Task<Void, Never>?
 
@@ -62,83 +72,56 @@ private final class ReadUIMessageStreamController<Message: UIMessageConvertible>
                 try await job(
                     StreamingUIMessageJobContext(
                         state: self.state,
-                        write: { self.emitCurrentMessage() }
+                        write: { await self.emitCurrentMessage() }
                     )
                 )
             },
             onError: { error in
-                self.handleError(error)
+                await self.handleError(error)
+                if self.terminateOnError {
+                    throw error
+                }
             }
         )
 
         consumeTask = Task {
-            await consumeStream(
-                stream: processedStream,
-                onError: { error in
-                    self.handleError(error)
+            do {
+                for try await _ in processedStream {
+                    // Drain the processed stream to keep state updates flowing.
                 }
-            )
-            self.finishIfNeeded()
-        }
-
-        continuation?.onTermination = { _ in
-            self.cancel()
+                self.finishIfNeeded()
+            } catch {
+                await self.handleError(error)
+                self.finishIfNeeded()
+            }
         }
     }
 
-    private func emitCurrentMessage() {
-        lock.lock()
-        guard let continuation, !hasErrored else {
-            lock.unlock()
-            return
-        }
-        let snapshot = state.message.clone()
-        lock.unlock()
-
-        continuation.yield(snapshot)
+    private func emitCurrentMessage() async {
+        guard !hasErrored else { return }
+        continuation.yield(await state.messageSnapshot())
     }
 
-    private func handleError(_ error: Error) {
+    private func handleError(_ error: Error) async {
         errorHandler?(error)
 
-        guard terminateOnError else {
+        guard terminateOnError, !hasErrored else {
             return
         }
 
-        lock.lock()
-        guard !hasErrored else {
-            lock.unlock()
-            return
-        }
         hasErrored = true
-        let continuation = self.continuation
-        self.continuation = nil
-        lock.unlock()
-
-        continuation?.finish(throwing: error)
+        continuation.finish(throwing: error)
         cancel()
     }
 
     private func finishIfNeeded() {
-        lock.lock()
-        guard !hasErrored else {
-            lock.unlock()
-            return
-        }
-        let continuation = self.continuation
-        self.continuation = nil
-        lock.unlock()
-
-        continuation?.finish()
+        guard !hasErrored else { return }
+        continuation.finish()
     }
 
-    private func cancel() {
-        lock.lock()
+    func cancel() {
         let task = consumeTask
         consumeTask = nil
-        continuation = nil
-        lock.unlock()
-
         task?.cancel()
     }
 }

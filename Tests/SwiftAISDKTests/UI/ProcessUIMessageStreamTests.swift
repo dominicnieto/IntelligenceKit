@@ -52,8 +52,9 @@ struct ProcessUIMessageStreamTests {
             .finishStep,
             .finish(finishReason: nil, messageMetadata: nil)
         ])
+        let message = await state.messageSnapshot()
 
-        guard case let .tool(toolPart)? = state.message.parts.first(where: {
+        guard case let .tool(toolPart)? = message.parts.first(where: {
             if case let .tool(part) = $0 {
                 return part.toolCallId == "tool-call-1"
             }
@@ -106,8 +107,9 @@ struct ProcessUIMessageStreamTests {
             .finishStep,
             .finish(finishReason: nil, messageMetadata: nil)
         ])
+        let message = await state.messageSnapshot()
 
-        guard case let .dynamicTool(toolPart)? = state.message.parts.first(where: {
+        guard case let .dynamicTool(toolPart)? = message.parts.first(where: {
             if case let .dynamicTool(part) = $0 {
                 return part.toolCallId == "tool-call-2"
             }
@@ -153,17 +155,18 @@ struct ProcessUIMessageStreamTests {
             .finishStep,
             .finish(finishReason: nil, messageMetadata: nil)
         ])
+        let message = await state.messageSnapshot()
 
-        #expect(state.message.parts.count == 2)
+        #expect(message.parts.count == 2)
 
-        let staticToolParts = state.message.parts.compactMap { part -> UIToolUIPart? in
+        let staticToolParts = message.parts.compactMap { part -> UIToolUIPart? in
             if case .tool(let toolPart) = part {
                 return toolPart
             }
             return nil
         }
 
-        let dynamicToolParts = state.message.parts.compactMap { part -> UIDynamicToolUIPart? in
+        let dynamicToolParts = message.parts.compactMap { part -> UIDynamicToolUIPart? in
             if case .dynamicTool(let toolPart) = part {
                 return toolPart
             }
@@ -290,15 +293,16 @@ struct ProcessUIMessageStreamTests {
             .finishStep,
             .finish(finishReason: nil, messageMetadata: nil)
         ])
+        let message = await state.messageSnapshot()
 
-        let staticToolParts = state.message.parts.compactMap { part -> UIToolUIPart? in
+        let staticToolParts = message.parts.compactMap { part -> UIToolUIPart? in
             if case .tool(let toolPart) = part {
                 return toolPart
             }
             return nil
         }
 
-        let dynamicToolParts = state.message.parts.compactMap { part -> UIDynamicToolUIPart? in
+        let dynamicToolParts = message.parts.compactMap { part -> UIDynamicToolUIPart? in
             if case .dynamicTool(let toolPart) = part {
                 return toolPart
             }
@@ -381,7 +385,8 @@ struct ProcessUIMessageStreamTests {
         #expect(streamingPart.callProviderMetadata == callMetadata)
         #expect(streamingPart.title == "Weather lookup")
 
-        guard case let .tool(finalToolPart)? = result.state.message.parts.first(where: {
+        let finalMessage = await result.state.messageSnapshot()
+        guard case let .tool(finalToolPart)? = finalMessage.parts.first(where: {
             if case .tool(let toolPart) = $0 {
                 return toolPart.toolCallId == "tool-call-id"
             }
@@ -429,10 +434,11 @@ struct ProcessUIMessageStreamTests {
             ],
             lastMessage: initialMessage
         )
+        let message = await state.messageSnapshot()
 
-        #expect(state.message.id == "original-id")
+        #expect(message.id == "original-id")
 
-        guard case let .tool(toolPart)? = state.message.parts.first(where: {
+        guard case let .tool(toolPart)? = message.parts.first(where: {
             if case .tool(let part) = $0 {
                 return part.toolCallId == "call-1"
             }
@@ -479,10 +485,11 @@ struct ProcessUIMessageStreamTests {
             ],
             lastMessage: initialMessage
         )
+        let message = await state.messageSnapshot()
 
-        #expect(state.message.id == "original-id")
+        #expect(message.id == "original-id")
 
-        guard case let .dynamicTool(toolPart)? = state.message.parts.first(where: {
+        guard case let .dynamicTool(toolPart)? = message.parts.first(where: {
             if case .dynamicTool(let part) = $0 {
                 return part.toolCallId == "call-1"
             }
@@ -522,7 +529,8 @@ struct ProcessUIMessageStreamTests {
                     StreamingUIMessageJobContext(
                         state: state,
                         write: {
-                            writes.withValue { $0.append(state.message.clone()) }
+                            let snapshot = await state.messageSnapshot()
+                            writes.withValue { $0.append(snapshot) }
                         }
                     )
                 )

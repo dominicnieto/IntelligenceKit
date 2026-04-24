@@ -16,11 +16,11 @@ import AISDKProviderUtils
 
 public struct StreamingUIMessageJobContext<Message: UIMessageConvertible>: Sendable {
     public let state: StreamingUIMessageState<Message>
-    public let write: @Sendable () -> Void
+    public let write: @Sendable () async -> Void
 
     public init(
         state: StreamingUIMessageState<Message>,
-        write: @escaping @Sendable () -> Void
+        write: @escaping @Sendable () async -> Void
     ) {
         self.state = state
         self.write = write
@@ -30,12 +30,8 @@ public struct StreamingUIMessageJobContext<Message: UIMessageConvertible>: Senda
 public typealias StreamingUIMessageJob<Message: UIMessageConvertible> =
     @Sendable (StreamingUIMessageJobContext<Message>) async throws -> Void
 
-public final class StreamingUIMessageState<Message: UIMessageConvertible>: @unchecked Sendable {
-    var message: Message
-    var activeTextPartIndices: [String: Int]
-    var activeReasoningPartIndices: [String: Int]
-    var partialToolCalls: [String: PartialToolCall]
-    var finishReason: FinishReason? = nil
+public actor StreamingUIMessageState<Message: UIMessageConvertible> {
+    private var storage: Storage<Message>
 
     init(
         message: Message,
@@ -43,14 +39,46 @@ public final class StreamingUIMessageState<Message: UIMessageConvertible>: @unch
         activeReasoningPartIndices: [String: Int] = [:],
         partialToolCalls: [String: PartialToolCall] = [:]
     ) {
-        self.message = message
-        self.activeTextPartIndices = activeTextPartIndices
-        self.activeReasoningPartIndices = activeReasoningPartIndices
-        self.partialToolCalls = partialToolCalls
+        storage = Storage(
+            message: message,
+            activeTextPartIndices: activeTextPartIndices,
+            activeReasoningPartIndices: activeReasoningPartIndices,
+            partialToolCalls: partialToolCalls
+        )
     }
 
+    fileprivate func withMutableState<R: Sendable>(
+        _ body: @Sendable (inout Storage<Message>) throws -> R
+    ) rethrows -> R {
+        try body(&storage)
+    }
+
+    func messageSnapshot() -> Message {
+        storage.message.clone()
+    }
+
+    func snapshot() -> StreamingUIMessageSnapshot<Message> {
+        StreamingUIMessageSnapshot(
+            message: storage.message.clone(),
+            finishReason: storage.finishReason
+        )
+    }
+}
+
+public struct StreamingUIMessageSnapshot<Message: UIMessageConvertible>: Sendable {
+    public let message: Message
+    public let finishReason: FinishReason?
+}
+
+private struct Storage<Message: UIMessageConvertible>: Sendable {
+    var message: Message
+    var activeTextPartIndices: [String: Int]
+    var activeReasoningPartIndices: [String: Int]
+    var partialToolCalls: [String: PartialToolCall]
+    var finishReason: FinishReason? = nil
+
     @discardableResult
-    func appendPart(_ part: UIMessagePart) -> Int {
+    mutating func appendPart(_ part: UIMessagePart) -> Int {
         message.parts.append(part)
         return message.parts.count - 1
     }
@@ -90,7 +118,7 @@ public typealias UIMessageToolCallHandler = @Sendable (AnyUIMessageChunk) async 
 public func processUIMessageStream<Message: UIMessageConvertible>(
     stream: AsyncThrowingStream<AnyUIMessageChunk, Error>,
     runUpdateMessageJob: @escaping @Sendable (_ job: @escaping StreamingUIMessageJob<Message>) async throws -> Void,
-    onError: ErrorHandler?,
+    onError: (@Sendable (Error) async throws -> Void)?,
     messageMetadataSchema: FlexibleSchema<JSONValue>? = nil,
     dataPartSchemas: [String: FlexibleSchema<JSONValue>]? = nil,
     onToolCall: UIMessageToolCallHandler? = nil,
@@ -113,7 +141,7 @@ public func processUIMessageStream<Message: UIMessageConvertible>(
 func processUIMessageStreamInternal<Message: UIMessageConvertible>(
     stream: AsyncThrowingStream<AnyUIMessageChunk, Error>,
     runUpdateMessageJob: @escaping @Sendable (_ job: @escaping StreamingUIMessageJob<Message>) async throws -> Void,
-    onError: ErrorHandler?,
+    onError: (@Sendable (Error) async throws -> Void)?,
     messageMetadataSchema: FlexibleSchema<JSONValue>? = nil,
     dataPartSchemas: [String: FlexibleSchema<JSONValue>]? = nil,
     onToolCall: UIMessageToolCallHandler? = nil,
@@ -135,7 +163,7 @@ func processUIMessageStreamInternal<Message: UIMessageConvertible>(
 private func processUIMessageStreamImpl<Message: UIMessageConvertible>(
     stream: AsyncThrowingStream<AnyUIMessageChunk, Error>,
     runUpdateMessageJob: @escaping @Sendable (_ job: @escaping StreamingUIMessageJob<Message>) async throws -> Void,
-    onError: ErrorHandler?,
+    onError: (@Sendable (Error) async throws -> Void)?,
     messageMetadataSchema: FlexibleSchema<JSONValue>?,
     dataPartSchemas: [String: FlexibleSchema<JSONValue>]?,
     onToolCall: UIMessageToolCallHandler?,
@@ -185,7 +213,7 @@ private func processUIMessageStreamImpl<Message: UIMessageConvertible>(
 private func handleChunk<Message: UIMessageConvertible>(
     _ chunk: AnyUIMessageChunk,
     context: StreamingUIMessageJobContext<Message>,
-    onError: ErrorHandler?,
+    onError: (@Sendable (Error) async throws -> Void)?,
     messageMetadataSchema: FlexibleSchema<JSONValue>?,
     dataPartSchemas: [String: FlexibleSchema<JSONValue>]?,
     onToolCall: UIMessageToolCallHandler?,
@@ -194,12 +222,14 @@ private func handleChunk<Message: UIMessageConvertible>(
     switch chunk {
     case .textStart(let id, let providerMetadata):
         let part = TextUIPart(text: "", state: .streaming, providerMetadata: providerMetadata)
-        let index = context.state.appendPart(.text(part))
-        context.state.activeTextPartIndices[id] = index
-        context.write()
+        _ = await context.state.withMutableState { state in
+            let index = state.appendPart(UIMessagePart.text(part))
+            state.activeTextPartIndices[id] = index
+        }
+        await context.write()
 
     case .textDelta(let id, let delta, let providerMetadata):
-        guard let index = context.state.activeTextPartIndices[id] else {
+        guard let index = await context.state.withMutableState({ $0.activeTextPartIndices[id] }) else {
             throw UIMessageStreamError(
                 chunkType: "text-delta",
                 chunkId: id,
@@ -207,16 +237,18 @@ private func handleChunk<Message: UIMessageConvertible>(
             )
         }
 
-        context.state.updateTextPart(at: index) { textPart in
-            textPart.text += delta
-            if let metadata = providerMetadata {
-                textPart.providerMetadata = metadata
+        _ = await context.state.withMutableState { state in
+            state.updateTextPart(at: index) { textPart in
+                textPart.text += delta
+                if let metadata = providerMetadata {
+                    textPart.providerMetadata = metadata
+                }
             }
         }
-        context.write()
+        await context.write()
 
     case .textEnd(let id, let providerMetadata):
-        guard let index = context.state.activeTextPartIndices.removeValue(forKey: id) else {
+        guard let index = await context.state.withMutableState({ $0.activeTextPartIndices.removeValue(forKey: id) }) else {
             throw UIMessageStreamError(
                 chunkType: "text-end",
                 chunkId: id,
@@ -224,22 +256,26 @@ private func handleChunk<Message: UIMessageConvertible>(
             )
         }
 
-        context.state.updateTextPart(at: index) { textPart in
-            textPart.state = .done
-            if let metadata = providerMetadata {
-                textPart.providerMetadata = metadata
+        _ = await context.state.withMutableState { state in
+            state.updateTextPart(at: index) { textPart in
+                textPart.state = TextUIPart.State.done
+                if let metadata = providerMetadata {
+                    textPart.providerMetadata = metadata
+                }
             }
         }
-        context.write()
+        await context.write()
 
     case .reasoningStart(let id, let providerMetadata):
         let part = ReasoningUIPart(text: "", state: .streaming, providerMetadata: providerMetadata)
-        let index = context.state.appendPart(.reasoning(part))
-        context.state.activeReasoningPartIndices[id] = index
-        context.write()
+        _ = await context.state.withMutableState { state in
+            let index = state.appendPart(UIMessagePart.reasoning(part))
+            state.activeReasoningPartIndices[id] = index
+        }
+        await context.write()
 
     case .reasoningDelta(let id, let delta, let providerMetadata):
-        guard let index = context.state.activeReasoningPartIndices[id] else {
+        guard let index = await context.state.withMutableState({ $0.activeReasoningPartIndices[id] }) else {
             throw UIMessageStreamError(
                 chunkType: "reasoning-delta",
                 chunkId: id,
@@ -247,16 +283,18 @@ private func handleChunk<Message: UIMessageConvertible>(
             )
         }
 
-        context.state.updateReasoningPart(at: index) { reasoningPart in
-            reasoningPart.text += delta
-            if let metadata = providerMetadata {
-                reasoningPart.providerMetadata = metadata
+        _ = await context.state.withMutableState { state in
+            state.updateReasoningPart(at: index) { reasoningPart in
+                reasoningPart.text += delta
+                if let metadata = providerMetadata {
+                    reasoningPart.providerMetadata = metadata
+                }
             }
         }
-        context.write()
+        await context.write()
 
     case .reasoningEnd(let id, let providerMetadata):
-        guard let index = context.state.activeReasoningPartIndices.removeValue(forKey: id) else {
+        guard let index = await context.state.withMutableState({ $0.activeReasoningPartIndices.removeValue(forKey: id) }) else {
             throw UIMessageStreamError(
                 chunkType: "reasoning-end",
                 chunkId: id,
@@ -264,18 +302,20 @@ private func handleChunk<Message: UIMessageConvertible>(
             )
         }
 
-        context.state.updateReasoningPart(at: index) { reasoningPart in
-            reasoningPart.state = .done
-            if let metadata = providerMetadata {
-                reasoningPart.providerMetadata = metadata
+        _ = await context.state.withMutableState { state in
+            state.updateReasoningPart(at: index) { reasoningPart in
+                reasoningPart.state = ReasoningUIPart.State.done
+                if let metadata = providerMetadata {
+                    reasoningPart.providerMetadata = metadata
+                }
             }
         }
-        context.write()
+        await context.write()
 
     case .file(let url, let mediaType, let providerMetadata):
         let part = FileUIPart(mediaType: mediaType, filename: nil, url: url, providerMetadata: providerMetadata)
-        context.state.appendPart(.file(part))
-        context.write()
+        _ = await context.state.withMutableState { $0.appendPart(UIMessagePart.file(part)) }
+        await context.write()
 
     case .sourceUrl(let sourceId, let url, let title, let providerMetadata):
         let part = SourceUrlUIPart(
@@ -284,8 +324,8 @@ private func handleChunk<Message: UIMessageConvertible>(
             title: title,
             providerMetadata: providerMetadata
         )
-        context.state.appendPart(.sourceURL(part))
-        context.write()
+        _ = await context.state.withMutableState { $0.appendPart(UIMessagePart.sourceURL(part)) }
+        await context.write()
 
     case .sourceDocument(let sourceId, let mediaType, let title, let filename, let providerMetadata):
         let part = SourceDocumentUIPart(
@@ -295,60 +335,71 @@ private func handleChunk<Message: UIMessageConvertible>(
             filename: filename,
             providerMetadata: providerMetadata
         )
-        context.state.appendPart(.sourceDocument(part))
-        context.write()
+        _ = await context.state.withMutableState { $0.appendPart(UIMessagePart.sourceDocument(part)) }
+        await context.write()
 
     case .startStep:
-        context.state.appendPart(.stepStart)
+        _ = await context.state.withMutableState { $0.appendPart(UIMessagePart.stepStart) }
 
     case .finishStep:
-        context.state.activeTextPartIndices.removeAll()
-        context.state.activeReasoningPartIndices.removeAll()
+        _ = await context.state.withMutableState { state in
+            state.activeTextPartIndices.removeAll()
+            state.activeReasoningPartIndices.removeAll()
+        }
 
     case .toolInputStart(let toolCallId, let toolName, let providerExecuted, let providerMetadata, let dynamic, let title):
         let isDynamic = dynamic ?? false
-        context.state.partialToolCalls[toolCallId] = PartialToolCall(
-            text: "",
-            toolName: toolName,
-            dynamic: isDynamic,
-            title: title
-        )
+        _ = await context.state.withMutableState { state in
+            state.partialToolCalls[toolCallId] = PartialToolCall(
+                text: "",
+                toolName: toolName,
+                dynamic: isDynamic,
+                title: title
+            )
 
-        if isDynamic {
-            context.state.upsertDynamicToolPart(
-                toolCallId: toolCallId,
-                toolName: toolName,
-                state: .inputStreaming,
-                input: nil,
-                output: nil,
-                errorText: nil,
-                providerExecuted: providerExecuted,
-                providerMetadata: providerMetadata,
-                preliminary: nil,
-                approval: nil,
-                title: title
-            )
-        } else {
-            context.state.upsertToolPart(
-                toolCallId: toolCallId,
-                toolName: toolName,
-                state: .inputStreaming,
-                input: nil,
-                output: nil,
-                rawInput: nil,
-                errorText: nil,
-                providerExecuted: providerExecuted,
-                providerMetadata: providerMetadata,
-                preliminary: nil,
-                approval: nil,
-                title: title
-            )
+            if isDynamic {
+                state.upsertDynamicToolPart(
+                    toolCallId: toolCallId,
+                    toolName: toolName,
+                    state: .inputStreaming,
+                    input: nil,
+                    output: nil,
+                    errorText: nil,
+                    providerExecuted: providerExecuted,
+                    providerMetadata: providerMetadata,
+                    preliminary: nil,
+                    approval: nil,
+                    title: title
+                )
+            } else {
+                state.upsertToolPart(
+                    toolCallId: toolCallId,
+                    toolName: toolName,
+                    state: .inputStreaming,
+                    input: nil,
+                    output: nil,
+                    rawInput: nil,
+                    errorText: nil,
+                    providerExecuted: providerExecuted,
+                    providerMetadata: providerMetadata,
+                    preliminary: nil,
+                    approval: nil,
+                    title: title
+                )
+            }
         }
 
-        context.write()
+        await context.write()
 
     case .toolInputDelta(let toolCallId, let inputTextDelta):
-        guard var partial = context.state.partialToolCalls[toolCallId] else {
+        guard let partial = await context.state.withMutableState({ state -> PartialToolCall? in
+            guard var partial = state.partialToolCalls[toolCallId] else {
+                return nil
+            }
+            partial.text += inputTextDelta
+            state.partialToolCalls[toolCallId] = partial
+            return partial
+        }) else {
             throw UIMessageStreamError(
                 chunkType: "tool-input-delta",
                 chunkId: toolCallId,
@@ -356,44 +407,43 @@ private func handleChunk<Message: UIMessageConvertible>(
             )
         }
 
-        partial.text += inputTextDelta
-        context.state.partialToolCalls[toolCallId] = partial
-
         let parsed = await parsePartialJson(partial.text)
         let partialInput = parsed.value
 
-        if partial.dynamic {
-            context.state.upsertDynamicToolPart(
-                toolCallId: toolCallId,
-                toolName: partial.toolName,
-                state: .inputStreaming,
-                input: partialInput,
-                output: nil,
-                errorText: nil,
-                providerExecuted: nil,
-                providerMetadata: nil,
-                preliminary: nil,
-                approval: nil,
-                title: partial.title
-            )
-        } else {
-            context.state.upsertToolPart(
-                toolCallId: toolCallId,
-                toolName: partial.toolName,
-                state: .inputStreaming,
-                input: partialInput,
-                output: nil,
-                rawInput: nil,
-                errorText: nil,
-                providerExecuted: nil,
-                providerMetadata: nil,
-                preliminary: nil,
-                approval: nil,
-                title: partial.title
-            )
+        _ = await context.state.withMutableState { state in
+            if partial.dynamic {
+                state.upsertDynamicToolPart(
+                    toolCallId: toolCallId,
+                    toolName: partial.toolName,
+                    state: .inputStreaming,
+                    input: partialInput,
+                    output: nil,
+                    errorText: nil,
+                    providerExecuted: nil,
+                    providerMetadata: nil,
+                    preliminary: nil,
+                    approval: nil,
+                    title: partial.title
+                )
+            } else {
+                state.upsertToolPart(
+                    toolCallId: toolCallId,
+                    toolName: partial.toolName,
+                    state: .inputStreaming,
+                    input: partialInput,
+                    output: nil,
+                    rawInput: nil,
+                    errorText: nil,
+                    providerExecuted: nil,
+                    providerMetadata: nil,
+                    preliminary: nil,
+                    approval: nil,
+                    title: partial.title
+                )
+            }
         }
 
-        context.write()
+        await context.write()
 
     case .toolInputAvailable(
         let toolCallId,
@@ -405,38 +455,40 @@ private func handleChunk<Message: UIMessageConvertible>(
         let title
     ):
         let isDynamic = dynamic ?? false
-        if isDynamic {
-            context.state.upsertDynamicToolPart(
-                toolCallId: toolCallId,
-                toolName: toolName,
-                state: .inputAvailable,
-                input: input,
-                output: nil,
-                errorText: nil,
-                providerExecuted: providerExecuted,
-                providerMetadata: providerMetadata,
-                preliminary: nil,
-                approval: nil,
-                title: title
-            )
-        } else {
-            context.state.upsertToolPart(
-                toolCallId: toolCallId,
-                toolName: toolName,
-                state: .inputAvailable,
-                input: input,
-                output: nil,
-                rawInput: nil,
-                errorText: nil,
-                providerExecuted: providerExecuted,
-                providerMetadata: providerMetadata,
-                preliminary: nil,
-                approval: nil,
-                title: title
-            )
+        _ = await context.state.withMutableState { state in
+            if isDynamic {
+                state.upsertDynamicToolPart(
+                    toolCallId: toolCallId,
+                    toolName: toolName,
+                    state: .inputAvailable,
+                    input: input,
+                    output: nil,
+                    errorText: nil,
+                    providerExecuted: providerExecuted,
+                    providerMetadata: providerMetadata,
+                    preliminary: nil,
+                    approval: nil,
+                    title: title
+                )
+            } else {
+                state.upsertToolPart(
+                    toolCallId: toolCallId,
+                    toolName: toolName,
+                    state: .inputAvailable,
+                    input: input,
+                    output: nil,
+                    rawInput: nil,
+                    errorText: nil,
+                    providerExecuted: providerExecuted,
+                    providerMetadata: providerMetadata,
+                    preliminary: nil,
+                    approval: nil,
+                    title: title
+                )
+            }
         }
 
-        context.write()
+        await context.write()
 
         if let onToolCall, providerExecuted != true {
             await onToolCall(chunk)
@@ -452,43 +504,45 @@ private func handleChunk<Message: UIMessageConvertible>(
         let errorText,
         _
     ):
-        let invocationKind = context.state.toolInvocationKind(for: toolCallId)
+        let invocationKind = await context.state.withMutableState { $0.toolInvocationKind(for: toolCallId) }
         let isDynamic = invocationKind == .dynamic ? true : invocationKind == .tool ? false : (dynamic ?? false)
-        if isDynamic {
-            context.state.upsertDynamicToolPart(
-                toolCallId: toolCallId,
-                toolName: toolName,
-                state: .outputError,
-                input: input,
-                output: nil,
-                errorText: errorText,
-                providerExecuted: providerExecuted,
-                providerMetadata: providerMetadata,
-                preliminary: nil,
-                approval: nil,
-                title: nil
-            )
-        } else {
-            context.state.upsertToolPart(
-                toolCallId: toolCallId,
-                toolName: toolName,
-                state: .outputError,
-                input: nil,
-                output: nil,
-                rawInput: input,
-                errorText: errorText,
-                providerExecuted: providerExecuted,
-                providerMetadata: providerMetadata,
-                preliminary: nil,
-                approval: nil,
-                title: nil
-            )
+        _ = await context.state.withMutableState { state in
+            if isDynamic {
+                state.upsertDynamicToolPart(
+                    toolCallId: toolCallId,
+                    toolName: toolName,
+                    state: .outputError,
+                    input: input,
+                    output: nil,
+                    errorText: errorText,
+                    providerExecuted: providerExecuted,
+                    providerMetadata: providerMetadata,
+                    preliminary: nil,
+                    approval: nil,
+                    title: nil
+                )
+            } else {
+                state.upsertToolPart(
+                    toolCallId: toolCallId,
+                    toolName: toolName,
+                    state: .outputError,
+                    input: nil,
+                    output: nil,
+                    rawInput: input,
+                    errorText: errorText,
+                    providerExecuted: providerExecuted,
+                    providerMetadata: providerMetadata,
+                    preliminary: nil,
+                    approval: nil,
+                    title: nil
+                )
+            }
         }
 
-        context.write()
+        await context.write()
 
     case .toolApprovalRequest(let approvalId, let toolCallId):
-        guard let invocationKind = context.state.toolInvocationKind(for: toolCallId) else {
+        guard let invocationKind = await context.state.withMutableState({ $0.toolInvocationKind(for: toolCallId) }) else {
             throw UIMessageStreamError(
                 chunkType: "tool-invocation",
                 chunkId: toolCallId,
@@ -496,19 +550,21 @@ private func handleChunk<Message: UIMessageConvertible>(
             )
         }
 
-        switch invocationKind {
-        case .tool:
-            context.state.updateToolPart(with: toolCallId) { part in
-                part.state = .approvalRequested
-                part.approval = UIToolApproval(id: approvalId)
-            }
-        case .dynamic:
-            context.state.updateDynamicToolPart(with: toolCallId) { part in
-                part.state = .approvalRequested
-                part.approval = UIToolApproval(id: approvalId)
+        _ = await context.state.withMutableState { state in
+            switch invocationKind {
+            case .tool:
+                state.updateToolPart(with: toolCallId) { part in
+                    part.state = .approvalRequested
+                    part.approval = UIToolApproval(id: approvalId)
+                }
+            case .dynamic:
+                state.updateDynamicToolPart(with: toolCallId) { part in
+                    part.state = .approvalRequested
+                    part.approval = UIToolApproval(id: approvalId)
+                }
             }
         }
-        context.write()
+        await context.write()
 
     case .toolOutputAvailable(
         let toolCallId,
@@ -518,7 +574,7 @@ private func handleChunk<Message: UIMessageConvertible>(
         _,
         let preliminary
     ):
-        guard let invocationKind = context.state.toolInvocationKind(for: toolCallId) else {
+        guard let invocationKind = await context.state.withMutableState({ $0.toolInvocationKind(for: toolCallId) }) else {
             throw UIMessageStreamError(
                 chunkType: "tool-invocation",
                 chunkId: toolCallId,
@@ -526,56 +582,58 @@ private func handleChunk<Message: UIMessageConvertible>(
             )
         }
 
-        switch invocationKind {
-        case .dynamic:
-            guard let toolPart = context.state.dynamicToolPart(for: toolCallId) else {
-                throw UIMessageStreamError(
-                    chunkType: "tool-invocation",
-                    chunkId: toolCallId,
-                    message: "No tool invocation found for tool call ID \"\(toolCallId)\"."
+        try await context.state.withMutableState { state in
+            switch invocationKind {
+            case .dynamic:
+                guard let toolPart = state.dynamicToolPart(for: toolCallId) else {
+                    throw UIMessageStreamError(
+                        chunkType: "tool-invocation",
+                        chunkId: toolCallId,
+                        message: "No tool invocation found for tool call ID \"\(toolCallId)\"."
+                    )
+                }
+                state.upsertDynamicToolPart(
+                    toolCallId: toolCallId,
+                    toolName: toolPart.toolName,
+                    state: .outputAvailable,
+                    input: toolPart.input,
+                    output: output,
+                    errorText: nil,
+                    providerExecuted: providerExecuted,
+                    providerMetadata: providerMetadata,
+                    preliminary: preliminary,
+                    approval: toolPart.approval,
+                    title: toolPart.title
+                )
+            case .tool:
+                guard let toolPart = state.toolPart(for: toolCallId) else {
+                    throw UIMessageStreamError(
+                        chunkType: "tool-invocation",
+                        chunkId: toolCallId,
+                        message: "No tool invocation found for tool call ID \"\(toolCallId)\"."
+                    )
+                }
+                state.upsertToolPart(
+                    toolCallId: toolCallId,
+                    toolName: toolPart.toolName,
+                    state: .outputAvailable,
+                    input: toolPart.input,
+                    output: output,
+                    rawInput: nil,
+                    errorText: nil,
+                    providerExecuted: providerExecuted ?? toolPart.providerExecuted,
+                    providerMetadata: providerMetadata,
+                    preliminary: preliminary,
+                    approval: toolPart.approval,
+                    title: toolPart.title
                 )
             }
-            context.state.upsertDynamicToolPart(
-                toolCallId: toolCallId,
-                toolName: toolPart.toolName,
-                state: .outputAvailable,
-                input: toolPart.input,
-                output: output,
-                errorText: nil,
-                providerExecuted: providerExecuted,
-                providerMetadata: providerMetadata,
-                preliminary: preliminary,
-                approval: toolPart.approval,
-                title: toolPart.title
-            )
-        case .tool:
-            guard let toolPart = context.state.toolPart(for: toolCallId) else {
-                throw UIMessageStreamError(
-                    chunkType: "tool-invocation",
-                    chunkId: toolCallId,
-                    message: "No tool invocation found for tool call ID \"\(toolCallId)\"."
-                )
-            }
-            context.state.upsertToolPart(
-                toolCallId: toolCallId,
-                toolName: toolPart.toolName,
-                state: .outputAvailable,
-                input: toolPart.input,
-                output: output,
-                rawInput: nil,
-                errorText: nil,
-                providerExecuted: providerExecuted ?? toolPart.providerExecuted,
-                providerMetadata: providerMetadata,
-                preliminary: preliminary,
-                approval: toolPart.approval,
-                title: toolPart.title
-            )
         }
 
-        context.write()
+        await context.write()
 
     case .toolOutputError(let toolCallId, let errorText, let providerExecuted, let providerMetadata, _):
-        guard let invocationKind = context.state.toolInvocationKind(for: toolCallId) else {
+        guard let invocationKind = await context.state.withMutableState({ $0.toolInvocationKind(for: toolCallId) }) else {
             throw UIMessageStreamError(
                 chunkType: "tool-invocation",
                 chunkId: toolCallId,
@@ -583,56 +641,58 @@ private func handleChunk<Message: UIMessageConvertible>(
             )
         }
 
-        switch invocationKind {
-        case .dynamic:
-            guard let toolPart = context.state.dynamicToolPart(for: toolCallId) else {
-                throw UIMessageStreamError(
-                    chunkType: "tool-invocation",
-                    chunkId: toolCallId,
-                    message: "No tool invocation found for tool call ID \"\(toolCallId)\"."
+        try await context.state.withMutableState { state in
+            switch invocationKind {
+            case .dynamic:
+                guard let toolPart = state.dynamicToolPart(for: toolCallId) else {
+                    throw UIMessageStreamError(
+                        chunkType: "tool-invocation",
+                        chunkId: toolCallId,
+                        message: "No tool invocation found for tool call ID \"\(toolCallId)\"."
+                    )
+                }
+                state.upsertDynamicToolPart(
+                    toolCallId: toolCallId,
+                    toolName: toolPart.toolName,
+                    state: .outputError,
+                    input: toolPart.input,
+                    output: nil,
+                    errorText: errorText,
+                    providerExecuted: providerExecuted,
+                    providerMetadata: providerMetadata,
+                    preliminary: toolPart.preliminary,
+                    approval: toolPart.approval,
+                    title: toolPart.title
+                )
+            case .tool:
+                guard let toolPart = state.toolPart(for: toolCallId) else {
+                    throw UIMessageStreamError(
+                        chunkType: "tool-invocation",
+                        chunkId: toolCallId,
+                        message: "No tool invocation found for tool call ID \"\(toolCallId)\"."
+                    )
+                }
+                state.upsertToolPart(
+                    toolCallId: toolCallId,
+                    toolName: toolPart.toolName,
+                    state: .outputError,
+                    input: toolPart.input,
+                    output: nil,
+                    rawInput: toolPart.rawInput,
+                    errorText: errorText,
+                    providerExecuted: providerExecuted ?? toolPart.providerExecuted,
+                    providerMetadata: providerMetadata,
+                    preliminary: toolPart.preliminary,
+                    approval: toolPart.approval,
+                    title: toolPart.title
                 )
             }
-            context.state.upsertDynamicToolPart(
-                toolCallId: toolCallId,
-                toolName: toolPart.toolName,
-                state: .outputError,
-                input: toolPart.input,
-                output: nil,
-                errorText: errorText,
-                providerExecuted: providerExecuted,
-                providerMetadata: providerMetadata,
-                preliminary: toolPart.preliminary,
-                approval: toolPart.approval,
-                title: toolPart.title
-            )
-        case .tool:
-            guard let toolPart = context.state.toolPart(for: toolCallId) else {
-                throw UIMessageStreamError(
-                    chunkType: "tool-invocation",
-                    chunkId: toolCallId,
-                    message: "No tool invocation found for tool call ID \"\(toolCallId)\"."
-                )
-            }
-            context.state.upsertToolPart(
-                toolCallId: toolCallId,
-                toolName: toolPart.toolName,
-                state: .outputError,
-                input: toolPart.input,
-                output: nil,
-                rawInput: toolPart.rawInput,
-                errorText: errorText,
-                providerExecuted: providerExecuted ?? toolPart.providerExecuted,
-                providerMetadata: providerMetadata,
-                preliminary: toolPart.preliminary,
-                approval: toolPart.approval,
-                title: toolPart.title
-            )
         }
 
-        context.write()
+        await context.write()
 
     case .toolOutputDenied(let toolCallId):
-        guard let invocationKind = context.state.toolInvocationKind(for: toolCallId) else {
+        guard let invocationKind = await context.state.withMutableState({ $0.toolInvocationKind(for: toolCallId) }) else {
             throw UIMessageStreamError(
                 chunkType: "tool-invocation",
                 chunkId: toolCallId,
@@ -640,64 +700,71 @@ private func handleChunk<Message: UIMessageConvertible>(
             )
         }
 
-        switch invocationKind {
-        case .tool:
-            context.state.updateToolPart(with: toolCallId) { part in
-                part.state = .outputDenied
-            }
-        case .dynamic:
-            context.state.updateDynamicToolPart(with: toolCallId) { part in
-                part.state = .outputDenied
+        _ = await context.state.withMutableState { state in
+            switch invocationKind {
+            case .tool:
+                state.updateToolPart(with: toolCallId) { part in
+                    part.state = .outputDenied
+                }
+            case .dynamic:
+                state.updateDynamicToolPart(with: toolCallId) { part in
+                    part.state = .outputDenied
+                }
             }
         }
-        context.write()
+        await context.write()
 
     case .start(let messageId, let messageMetadata):
-        if let messageId {
-            context.state.message.id = messageId
-        }
-
         if let metadata = messageMetadata {
+            let existing = await context.state.withMutableState { $0.message.metadata }
             if let merged = try await mergeMetadata(
-                existing: context.state.message.metadata,
+                existing: existing,
                 incoming: metadata,
                 schema: messageMetadataSchema
             ) {
-                context.state.message.metadata = merged
+                _ = await context.state.withMutableState { $0.message.metadata = merged }
             }
         }
 
+        if let messageId {
+            _ = await context.state.withMutableState { $0.message.id = messageId }
+        }
+
         if messageId != nil || messageMetadata != nil {
-            context.write()
+            await context.write()
         }
 
     case .finish(let finishReason, let messageMetadata):
         if let finishReason {
-            context.state.finishReason = finishReason
+            _ = await context.state.withMutableState { $0.finishReason = finishReason }
         }
         if let metadata = messageMetadata {
+            let existing = await context.state.withMutableState { $0.message.metadata }
             if let merged = try await mergeMetadata(
-                existing: context.state.message.metadata,
+                existing: existing,
                 incoming: metadata,
                 schema: messageMetadataSchema
             ) {
-                context.state.message.metadata = merged
-                context.write()
+                _ = await context.state.withMutableState { $0.message.metadata = merged }
+                await context.write()
             }
         }
 
     case .messageMetadata(let metadata):
+        let existing = await context.state.withMutableState { $0.message.metadata }
         if let merged = try await mergeMetadata(
-            existing: context.state.message.metadata,
+            existing: existing,
             incoming: metadata,
             schema: messageMetadataSchema
         ) {
-            context.state.message.metadata = merged
-            context.write()
+            _ = await context.state.withMutableState { $0.message.metadata = merged }
+            await context.write()
         }
 
     case .error(let errorText):
-        onError?(UIMessageChunkError(message: errorText))
+        if let onError {
+            try await onError(UIMessageChunkError(message: errorText))
+        }
 
     case .data(let dataChunk):
         if let schema = dataPartSchemas?[dataChunk.typeIdentifier] {
@@ -720,19 +787,21 @@ private func handleChunk<Message: UIMessageConvertible>(
             break
         }
 
-        if let index = context.state.indexOfDataPart(
-            typeIdentifier: dataChunk.typeIdentifier,
-            id: dataChunk.id
-        ) {
-            context.state.updateDataPart(at: index) { part in
-                part.data = dataChunk.data
+        _ = await context.state.withMutableState { state in
+            if let index = state.indexOfDataPart(
+                typeIdentifier: dataChunk.typeIdentifier,
+                id: dataChunk.id
+            ) {
+                state.updateDataPart(at: index) { part in
+                    part.data = dataChunk.data
+                }
+            } else {
+                state.appendPart(UIMessagePart.data(dataUIPart))
             }
-        } else {
-            context.state.appendPart(.data(dataUIPart))
         }
 
         onData?(dataUIPart)
-        context.write()
+        await context.write()
 
     case .abort:
         // handled by caller (needed only for onFinish metadata)
@@ -821,13 +890,13 @@ private struct UIMessageChunkError: Error, LocalizedError, CustomStringConvertib
     var errorDescription: String? { message }
 }
 
-private extension StreamingUIMessageState {
+private extension Storage {
     enum ToolInvocationKind {
         case tool
         case dynamic
     }
 
-    func updateTextPart(at index: Int, _ mutate: (inout TextUIPart) -> Void) {
+    mutating func updateTextPart(at index: Int, _ mutate: (inout TextUIPart) -> Void) {
         guard case .text(var part) = message.parts[index] else {
             return
         }
@@ -835,7 +904,7 @@ private extension StreamingUIMessageState {
         message.parts[index] = .text(part)
     }
 
-    func updateReasoningPart(at index: Int, _ mutate: (inout ReasoningUIPart) -> Void) {
+    mutating func updateReasoningPart(at index: Int, _ mutate: (inout ReasoningUIPart) -> Void) {
         guard case .reasoning(var part) = message.parts[index] else {
             return
         }
@@ -843,7 +912,7 @@ private extension StreamingUIMessageState {
         message.parts[index] = .reasoning(part)
     }
 
-    func updateToolPart(with toolCallId: String, mutate: (inout UIToolUIPart) -> Void) {
+    mutating func updateToolPart(with toolCallId: String, mutate: (inout UIToolUIPart) -> Void) {
         guard let index = toolPartIndex(for: toolCallId),
               case .tool(var part) = message.parts[index] else {
             return
@@ -852,7 +921,7 @@ private extension StreamingUIMessageState {
         message.parts[index] = .tool(part)
     }
 
-    func updateDynamicToolPart(with toolCallId: String, mutate: (inout UIDynamicToolUIPart) -> Void) {
+    mutating func updateDynamicToolPart(with toolCallId: String, mutate: (inout UIDynamicToolUIPart) -> Void) {
         guard let index = dynamicToolPartIndex(for: toolCallId),
               case .dynamicTool(var part) = message.parts[index] else {
             return
@@ -861,7 +930,7 @@ private extension StreamingUIMessageState {
         message.parts[index] = .dynamicTool(part)
     }
 
-    func updateDataPart(at index: Int, mutate: (inout DataUIPart) -> Void) {
+    mutating func updateDataPart(at index: Int, mutate: (inout DataUIPart) -> Void) {
         guard case .data(var part) = message.parts[index] else {
             return
         }
@@ -920,7 +989,7 @@ private extension StreamingUIMessageState {
         return nil
     }
 
-    func upsertToolPart(
+    mutating func upsertToolPart(
         toolCallId: String,
         toolName: String,
         state: UIToolInvocationState,
@@ -973,7 +1042,7 @@ private extension StreamingUIMessageState {
         }
     }
 
-    func upsertDynamicToolPart(
+    mutating func upsertDynamicToolPart(
         toolCallId: String,
         toolName: String,
         state: UIDynamicToolInvocationState,

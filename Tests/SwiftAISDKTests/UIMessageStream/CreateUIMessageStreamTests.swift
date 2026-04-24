@@ -12,9 +12,9 @@ struct CreateUIMessageStreamTests {
     @Test("writes chunks and closes the stream")
     func writesChunksAndCloses() async throws {
         let stream = makeStream { writer in
-            writer.write(AnyUIMessageChunk.textStart(id: "1", providerMetadata: nil))
-            writer.write(AnyUIMessageChunk.textDelta(id: "1", delta: "1a", providerMetadata: nil))
-            writer.write(AnyUIMessageChunk.textEnd(id: "1", providerMetadata: nil))
+            await writer.write(AnyUIMessageChunk.textStart(id: "1", providerMetadata: nil))
+            await writer.write(AnyUIMessageChunk.textDelta(id: "1", delta: "1a", providerMetadata: nil))
+            await writer.write(AnyUIMessageChunk.textEnd(id: "1", providerMetadata: nil))
         }
 
         let chunks = try await collectStream(stream)
@@ -31,7 +31,7 @@ struct CreateUIMessageStreamTests {
 
         let stream = makeStream(
             execute: { writer in
-                writer.merge(
+                await writer.merge(
                     createAsyncIterableStream(source: AsyncThrowingStream<AnyUIMessageChunk, Error> { continuation in
                         continuation.yield(.textDelta(id: "1", delta: "1a", providerMetadata: nil))
                         continuation.finish(throwing: TestError())
@@ -70,7 +70,7 @@ struct CreateUIMessageStreamTests {
         let writerBox = WriterBox<UIMessage>()
 
         let stream = makeStream { writer in
-            writer.write(AnyUIMessageChunk.textDelta(id: "1", delta: "1a", providerMetadata: nil))
+            await writer.write(AnyUIMessageChunk.textDelta(id: "1", delta: "1a", providerMetadata: nil))
             writerBox.store(writer)
         }
 
@@ -80,7 +80,7 @@ struct CreateUIMessageStreamTests {
         ])
 
         let writer = try #require(await writerBox.waitForValue())
-        writer.write(AnyUIMessageChunk.textDelta(id: "1", delta: "1b", providerMetadata: nil))
+        await writer.write(AnyUIMessageChunk.textDelta(id: "1", delta: "1b", providerMetadata: nil))
     }
 
     @Test("supports delayed merged streams while another merged stream is still open")
@@ -91,7 +91,7 @@ struct CreateUIMessageStreamTests {
         let chunkProbe = FinishEventProbe<AnyUIMessageChunk>()
 
         let stream = makeStream { writer in
-            writer.merge(firstProbe.stream())
+            await writer.merge(firstProbe.stream())
             writerProbe.store(writer)
         }
 
@@ -108,7 +108,7 @@ struct CreateUIMessageStreamTests {
             AnyUIMessageChunk.textDelta(id: "1", delta: "1a", providerMetadata: nil)
         ])
 
-        writer.merge(secondProbe.stream())
+        await writer.merge(secondProbe.stream())
 
         firstProbe.finish()
         secondProbe.yield(.textDelta(id: "2", delta: "2a", providerMetadata: nil))
@@ -128,9 +128,9 @@ struct CreateUIMessageStreamTests {
 
         let stream = makeStream(
             execute: { writer in
-                writer.write(AnyUIMessageChunk.textStart(id: "1", providerMetadata: nil))
-                writer.write(AnyUIMessageChunk.textDelta(id: "1", delta: "1a", providerMetadata: nil))
-                writer.write(AnyUIMessageChunk.textEnd(id: "1", providerMetadata: nil))
+                await writer.write(AnyUIMessageChunk.textStart(id: "1", providerMetadata: nil))
+                await writer.write(AnyUIMessageChunk.textDelta(id: "1", delta: "1a", providerMetadata: nil))
+                await writer.write(AnyUIMessageChunk.textEnd(id: "1", providerMetadata: nil))
             },
             onFinish: { event in
                 await finishEvents.append(event)
@@ -181,9 +181,9 @@ struct CreateUIMessageStreamTests {
 
         let stream = makeStream(
             execute: { writer in
-                writer.write(AnyUIMessageChunk.textStart(id: "1", providerMetadata: nil))
-                writer.write(AnyUIMessageChunk.textDelta(id: "1", delta: "1b", providerMetadata: nil))
-                writer.write(AnyUIMessageChunk.textEnd(id: "1", providerMetadata: nil))
+                await writer.write(AnyUIMessageChunk.textStart(id: "1", providerMetadata: nil))
+                await writer.write(AnyUIMessageChunk.textDelta(id: "1", delta: "1b", providerMetadata: nil))
+                await writer.write(AnyUIMessageChunk.textEnd(id: "1", providerMetadata: nil))
             },
             originalMessages: originalMessages,
             onFinish: { event in
@@ -234,7 +234,7 @@ struct CreateUIMessageStreamTests {
 
         let stream = makeStream(
             execute: { writer in
-                writer.write(AnyUIMessageChunk.start(messageId: nil, messageMetadata: nil))
+                await writer.write(AnyUIMessageChunk.start(messageId: nil, messageMetadata: nil))
             },
             originalMessages: originalMessages,
             onFinish: { event in
@@ -284,7 +284,7 @@ struct CreateUIMessageStreamTests {
 
         let stream = makeStream(
             execute: { writer in
-                writer.write(AnyUIMessageChunk.start(messageId: "existing-message-id", messageMetadata: nil))
+                await writer.write(AnyUIMessageChunk.start(messageId: "existing-message-id", messageMetadata: nil))
             },
             originalMessages: originalMessages,
             onFinish: { event in
@@ -326,10 +326,10 @@ struct CreateUIMessageStreamTests {
 
         let stream = makeStream(
             execute: { writer in
-                writer.write(AnyUIMessageChunk.textStart(id: "1", providerMetadata: nil))
-                writer.write(AnyUIMessageChunk.textDelta(id: "1", delta: "hello", providerMetadata: nil))
-                writer.write(AnyUIMessageChunk.textEnd(id: "1", providerMetadata: nil))
-                writer.write(AnyUIMessageChunk.finishStep)
+                await writer.write(AnyUIMessageChunk.textStart(id: "1", providerMetadata: nil))
+                await writer.write(AnyUIMessageChunk.textDelta(id: "1", delta: "hello", providerMetadata: nil))
+                await writer.write(AnyUIMessageChunk.textEnd(id: "1", providerMetadata: nil))
+                await writer.write(AnyUIMessageChunk.finishStep)
             },
             onStepFinish: { event in
                 await stepEvents.append(event)

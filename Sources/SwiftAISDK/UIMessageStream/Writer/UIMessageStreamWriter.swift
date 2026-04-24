@@ -9,10 +9,10 @@ public protocol UIMessageStreamWriter: Sendable {
     associatedtype Message: UIMessageConvertible
 
     /// Appends a chunk to the current UI message stream.
-    func write(_ part: InferUIMessageChunk<Message>)
+    func write(_ part: InferUIMessageChunk<Message>) async
 
     /// Merges another stream into the current UI message stream.
-    func merge(_ stream: AsyncIterableStream<InferUIMessageChunk<Message>>)
+    func merge(_ stream: AsyncIterableStream<InferUIMessageChunk<Message>>) async
 
     /// Optional error handler forwarded to nested writers.
     var onError: ErrorHandler? { get }

@@ -5,7 +5,7 @@ Date: 2026-04-24
 Scope:
 - audited `Sources/` using the `swift-concurrency` and `swift-concurrency-pro` review criteria
 - inventory source: `grep -RIn "@unchecked Sendable" Sources`
-- current raw count: `143`
+- current raw count: `138`
 
 ## Summary
 
@@ -14,6 +14,13 @@ The raw count is high, but it is not one homogeneous problem.
 Most important takeaway:
 - the first work should not be “delete the largest number of annotations”
 - the first work should be “remove `@unchecked Sendable` from mutable runtime state that sits on active stream / transport / task boundaries”
+- Hard API breaks are acceptable if they produce a cleaner Swift-native concurrency model.
+
+Completed first-wave slice:
+- refactored the `UIMessageStream` runtime (`ProcessUIMessageStream`, `CreateUIMessageStream`, `ReadUIMessageStream`, `TeeAsyncThrowingStream`) to use actor-owned state/coordinators and async mutation APIs
+- converted `AsyncIterableStream` into a plain `Sendable` struct
+- raw count reduction from this wave: `143 -> 138`
+- remaining unchecked item in the touched stream facade: `AnySendableError` in `AsyncIterableStream`
 
 Count concentration by target:
 - `SwiftAISDK`: `49`
@@ -66,6 +73,15 @@ Preferred redesign direction:
 - move mutable state behind actors where practical
 - keep outer result/container types immutable and plain `Sendable`
 - avoid “controller class + lock + async callbacks” when actor-owned state is clearer
+
+Status after first wave:
+- completed for the `UIMessageStream` cluster and the `AsyncIterableStream` facade
+- architecture template validated by focused suites covering create/read/process/finish/UI stream behavior and `AsyncIterableStream`
+- remaining files in this bucket should follow the same template:
+  - async mutation edges instead of sync methods hiding locks
+  - one explicit isolation boundary for mutable runtime state
+  - centralized continuation / task / cancellation ownership
+  - thin outer facades or value wrappers
 
 ### 2. MCP client / transport state machines
 
@@ -141,6 +157,10 @@ Preferred redesign direction:
 Recommended approach:
 - treat this as one deliberate subsystem redesign
 - do not optimize for raw count alone
+
+Important boundary learned from the first wave:
+- do not mix this runtime-state pattern with the later opaque-payload cleanup
+- `AnySendableError` and TypeScript-`unknown` mirrors are still separate API-shape work even when they live near stream code
 
 ### 5. Immutable wrappers and adapters that should probably become plain `Sendable`
 

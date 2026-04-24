@@ -59,6 +59,11 @@ This is the order I would tackle for the migration.
 
 ### 1. Live mutable runtime state in stream / UI / pipeline code
 
+Status:
+- partially completed
+- completed for the UI message stream runtime and the `AsyncIterableStream` facade
+- remaining work in this bucket is now concentrated in the non-UI pipeline/result coordinators
+
 Why first:
 - highest chance of hiding real race conditions
 - sits on active async boundaries, continuations, tasks, callbacks, or mutable shared state
@@ -127,6 +132,10 @@ Next target after MCP:
 - then the utility runtime-state cluster (`DelayedPromise`, `ResolvablePromise`, `SerialJobExecutor`, timeout/cancellation helpers)
 
 ### 3. Core utility synchronization wrappers used across the package
+
+Status:
+- pending
+- now follows the remaining stream / pipeline coordinators rather than MCP, since the MCP slice is complete
 
 Why third:
 - smaller blast radius than the streaming/MCP layers
@@ -295,13 +304,14 @@ These are the places where the count is high or the design is port-shaped enough
 
 If the goal is best migration value, I would do it in this order:
 
-1. live stream / UI / pipeline state
-2. MCP client + transports
-3. shared utility synchronization wrappers
-4. schema + Zod subsystem redesign
-5. immutable wrapper cleanup
-6. generated file/result wrappers
-7. opaque `Any` / public API payload cleanup
+1. `completed` live stream / UI state
+2. `completed` MCP client + transports
+3. `next` remaining stream / pipeline coordinators such as `RunToolsTransformation`
+4. shared utility synchronization wrappers
+5. schema + Zod subsystem redesign
+6. immutable wrapper cleanup
+7. generated file/result wrappers
+8. opaque `Any` / public API payload cleanup
 
 If the goal is fastest count reduction, I would do it in this order:
 
@@ -319,5 +329,9 @@ For this repo, I would optimize for migration correctness, not for the raw count
 
 That means:
 - tackle the mutable runtime state first
+- the first two runtime-state slices are now done:
+  - UI message stream runtime
+  - MCP client / transport state machines
+- continue with the next mutable runtime-state coordinator before broad utility or API-shape cleanup
 - leave the “TypeScript unknown” API mirrors for a later public-surface cleanup
 - treat the Zod/schema cluster as one architecture item, not dozens of independent micro-fixes

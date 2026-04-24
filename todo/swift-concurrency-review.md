@@ -4,7 +4,7 @@ Source review: `.context/attachments/pasted_text_2026-04-24_09-17-59.txt`
 
 ## Remaining Concurrency Surface
 
-- Open tracker items: `3`
+- Open tracker items: `2`
 - Lower-priority follow-ups: `4`
 - `@unchecked Sendable` declarations remaining in `Sources/`: `143`
 - `nonisolated(unsafe)` declarations remaining in `Sources/`: `5`
@@ -40,14 +40,14 @@ Status legend:
   - localized SSE parsing to a package-scoped helper in `AISDKProviderUtils`
   - production SSE consumers now use the upstream parser boundary instead of the old split-state wrapper
 
-### [ ] 5. `StreamTextActor` hand-rolled task-group pattern / unstructured top-level task
+### [x] 5. `StreamTextActor` hand-rolled task-group pattern / unstructured top-level task
 - File: `Sources/SwiftAISDK/GenerateText/StreamTextActor.swift`
-- Problem:
-  - tool execution is managed with a dictionary of `Task`s instead of structured concurrency
-  - `ensureStarted()` spawns `run()` with an unstructured `Task`
-- Suggested direction:
-  - replace in-flight tool task bookkeeping with `withTaskGroup` or another structured child-task pattern
-  - make caller cancellation flow through the stream pipeline instead of relying on manual stop/cancel handling alone
+- Status: fixed
+- Outcome:
+  - `StreamText` now explicitly owns startup of the actor run loop; `StreamTextActor` no longer self-starts with an unstructured top-level task
+  - per-tool task bookkeeping and the intermediate coordinator mailbox were removed in favor of a step-owned `withThrowingTaskGroup`
+  - each active provider step now has a single owned `currentStepTask`, so user stop cancels the whole step and its child tool work through structured concurrency
+  - approval handling, dynamic tool scheduling, `.abort` before final `.finish`, and step/result semantics were preserved under the new ownership model
 
 ## Lower-impact findings
 
@@ -125,9 +125,9 @@ Status legend:
 
 ## What’s next
 
-Next target: **Finding 5 — `StreamTextActor` hand-rolled task-group pattern / unstructured top-level task**.
+Next target: **Finding 6 — `@unchecked Sendable` cleanup / invariant tightening**.
 
 Why this is next:
-- it is now the largest remaining high-impact concurrency item from the original review
-- it affects cancellation flow and task structure in a core streaming path
-- the new warning-observer todo is real but test-only and not tied to the just-finished `EventSource` work
+- it is now the largest remaining migration surface directly tied to Swift 6.2 concurrency correctness
+- the `StreamTextActor` task-structure item is complete, so the next highest-value cleanup is reducing unchecked sendability inherited from the port
+- the warning-observer todo is real but test-only and not the main production concurrency migration risk

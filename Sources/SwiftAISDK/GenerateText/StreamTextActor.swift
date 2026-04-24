@@ -58,51 +58,13 @@ actor StreamTextActor {
         let providerMetadata: ProviderMetadata?
     }
 
-    private actor ToolExecutionCoordinator {
-        private var continuation: AsyncStream<PendingApproval>.Continuation?
-        private let task: Task<Void, Never>
-
-        init(execute: @escaping @Sendable (PendingApproval) async -> Void) {
-            let (stream, continuation) = AsyncStream.makeStream(of: PendingApproval.self)
-            self.continuation = continuation
-            self.task = Task {
-                await withTaskGroup(of: Void.self) { group in
-                    for await pending in stream {
-                        group.addTask {
-                            await execute(pending)
-                        }
-                    }
-                    await group.waitForAll()
-                }
-            }
-        }
-
-        func submit(_ pending: PendingApproval) {
-            continuation?.yield(pending)
-        }
-
-        func cancel() {
-            task.cancel()
-            finishStream()
-        }
-
-        func finish(cancelOutstanding: Bool = false) async {
-            finishStream()
-            if cancelOutstanding {
-                task.cancel()
-            }
-            await task.value
-        }
-
-        private func finishStream() {
-            continuation?.finish()
-            continuation = nil
-        }
+    private enum StepRunResult {
+        case finishedStep
+        case stopped
     }
 
-    private var pendingApprovals: [PendingApproval] = []
     private let mergedAbortSignal: (@Sendable () -> Bool)?
-    private var activeToolCoordinator: ToolExecutionCoordinator?
+    private var currentStepTask: Task<StepRunResult, Error>?
 
     private let totalUsagePromise: DelayedPromise<LanguageModelUsage>
     private let finishReasonPromise: DelayedPromise<FinishReason>
@@ -157,9 +119,7 @@ actor StreamTextActor {
     // This mirrors the upstream `stopStream` hook used by transforms.
     func requestStop() async {
         externalStopRequested = true
-        if let activeToolCoordinator {
-            await activeToolCoordinator.cancel()
-        }
+        currentStepTask?.cancel()
 
         // Emit `.abort` immediately to notify consumers, but keep streams open
         // until the provider finishes so we can still publish a final `.finish`.
@@ -178,7 +138,11 @@ actor StreamTextActor {
         runStarted = true
 
         do {
-            try await consumeProviderStream(stream: source, emitStartStep: true)
+            let initialStepResult = try await runStepTask(stream: source, emitStartStep: true)
+            guard initialStepResult == .finishedStep else {
+                await finishAll(response: nil, usage: nil, finishReason: nil, providerMetadata: nil)
+                return
+            }
             while !terminated {
                 if externalStopRequested { break }
                 let continueStreaming = await shouldStartAnotherStep()
@@ -243,14 +207,41 @@ actor StreamTextActor {
                     try await self.model.doStream(options: options)
                 }
                 setInitialRequest(result.request)
-                try await consumeProviderStream(stream: result.stream, emitStartStep: true)
+                let stepResult = try await runStepTask(stream: result.stream, emitStartStep: true)
+                if stepResult == .stopped {
+                    break
+                }
             }
             await finishAll(response: nil, usage: nil, finishReason: nil, providerMetadata: nil)
         } catch is CancellationError {
-            await finishAll(response: nil, usage: nil, finishReason: nil, providerMetadata: nil, aborted: true)
+            if externalStopRequested {
+                await finishAll(response: nil, usage: nil, finishReason: nil, providerMetadata: nil)
+            } else {
+                await finishAll(response: nil, usage: nil, finishReason: nil, providerMetadata: nil, aborted: true)
+            }
         } catch {
             await finishAll(
                 response: nil, usage: nil, finishReason: nil, providerMetadata: nil, error: error)
+        }
+    }
+
+    private func runStepTask(
+        stream: AsyncThrowingStream<LanguageModelV3StreamPart, Error>,
+        emitStartStep: Bool
+    ) async throws -> StepRunResult {
+        let task = Task { [self] in
+            try await consumeProviderStream(stream: stream, emitStartStep: emitStartStep)
+        }
+        currentStepTask = task
+        defer { currentStepTask = nil }
+
+        do {
+            return try await task.value
+        } catch is CancellationError {
+            if externalStopRequested {
+                return .stopped
+            }
+            throw CancellationError()
         }
     }
 
@@ -303,10 +294,6 @@ actor StreamTextActor {
                 return true
             }
         }
-    }
-
-    private func removePendingApproval(toolCallId: String) {
-        pendingApprovals.removeAll { $0.toolCallId == toolCallId }
     }
 
     private func makeTypedToolResult(
@@ -500,7 +487,6 @@ actor StreamTextActor {
             currentToolOutputs.append(.result(result))
             activeToolInputs.removeValue(forKey: result.toolCallId)
             activeToolNames.removeValue(forKey: result.toolCallId)
-            removePendingApproval(toolCallId: result.toolCallId)
         }
     }
 
@@ -510,14 +496,12 @@ actor StreamTextActor {
         currentToolOutputs.append(.error(error))
         activeToolInputs.removeValue(forKey: error.toolCallId)
         activeToolNames.removeValue(forKey: error.toolCallId)
-        removePendingApproval(toolCallId: error.toolCallId)
     }
 
     private func emitToolOutputDenied(callId: String, toolName: String) async {
         await fullBroadcaster.send(.toolOutputDenied(ToolOutputDenied(toolCallId: callId, toolName: toolName)))
         activeToolInputs.removeValue(forKey: callId)
         activeToolNames.removeValue(forKey: callId)
-        removePendingApproval(toolCallId: callId)
     }
 
     private func handleExecutionResult(_ execution: ToolExecutionResult<JSONValue>, pending: PendingApproval) async {
@@ -599,33 +583,6 @@ actor StreamTextActor {
         }
     }
 
-    private func resolvePendingApprovals(using coordinator: ToolExecutionCoordinator?) async {
-        if pendingApprovals.isEmpty { return }
-        let approvals = pendingApprovals
-        pendingApprovals.removeAll()
-        for pending in approvals {
-            if Task.isCancelled { break }
-            let approval = ToolApprovalRequestOutput(approvalId: pending.toolCallId, toolCall: pending.typedCall)
-            if let resolver = approvalResolver {
-                let decision = await resolver(approval)
-                if Task.isCancelled { break }
-                switch decision {
-                case .approve:
-                    if let coordinator {
-                        await coordinator.submit(pending)
-                    }
-                case .deny:
-                    await emitToolOutputDenied(callId: pending.toolCallId, toolName: pending.toolName)
-                }
-            } else {
-                await fullBroadcaster.send(.toolApprovalRequest(approval))
-                recordedContent.append(.toolApprovalRequest(approval))
-                activeToolInputs.removeValue(forKey: pending.toolCallId)
-                activeToolNames.removeValue(forKey: pending.toolCallId)
-            }
-        }
-    }
-
     private func executeToolAfterApproval(_ pending: PendingApproval) async {
         guard let execute = pending.tool.execute else {
             await emitToolOutputDenied(callId: pending.toolCallId, toolName: pending.toolName)
@@ -675,12 +632,7 @@ actor StreamTextActor {
     private func consumeProviderStream(
         stream: AsyncThrowingStream<LanguageModelV3StreamPart, Error>,
         emitStartStep: Bool
-    ) async throws {
-        let toolCoordinator = ToolExecutionCoordinator { [weak self] pending in
-            await self?.executeToolAfterApproval(pending)
-        }
-        activeToolCoordinator = toolCoordinator
-
+    ) async throws -> StepRunResult {
         // Reset per-step state
         recordedContent.removeAll()
         activeTextContent.removeAll()
@@ -696,25 +648,13 @@ actor StreamTextActor {
         capturedResponseId = configuration.generateId()
         capturedModelId = model.modelId
         capturedTimestamp = configuration.currentDate()
-        if externalStopRequested { return }
+        if externalStopRequested { return .stopped }
 
         var chunkTimeoutTask: Task<Void, Never>? = nil
-        func clearChunkTimeout() {
+        defer {
             chunkTimeoutTask?.cancel()
             chunkTimeoutTask = nil
         }
-        func resetChunkTimeout() {
-            guard let chunkTimeoutMs = configuration.chunkTimeoutMs,
-                  let timeoutController = configuration.timeoutController else { return }
-            chunkTimeoutTask?.cancel()
-            chunkTimeoutTask = Task {
-                do {
-                    try await sleepMs(chunkTimeoutMs)
-                    timeoutController.markChunkTimedOut()
-                } catch {}
-            }
-        }
-        defer { clearChunkTimeout() }
 
         // Per-step framing is emitted after we have seen `.streamStart(warnings)`
         // to ensure warnings are populated. If provider skips `.streamStart`,
@@ -722,21 +662,67 @@ actor StreamTextActor {
         let shouldEmitStartStep = emitStartStep
         var didEmitStartStep = false
         var sawStreamStart = false
-        for try await part in stream {
-            resetChunkTimeout()
-            if Task.isCancelled {
-                await finishAll(
-                    response: nil,
-                    usage: nil,
-                    finishReason: nil,
-                    providerMetadata: nil,
-                    aborted: true,
-                    error: nil
-                )
-                return
+        var stepResult: StepRunResult = .stopped
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            var pendingApprovals: [PendingApproval] = []
+
+            func scheduleToolExecution(_ pending: PendingApproval) {
+                group.addTask { [self] in
+                    await executeToolAfterApproval(pending)
+                }
             }
-            if externalStopRequested { break }
-            switch part {
+
+            func resolvePendingApprovals() async {
+                if pendingApprovals.isEmpty { return }
+                let approvals = pendingApprovals
+                pendingApprovals.removeAll()
+                for pending in approvals {
+                    if Task.isCancelled { break }
+                    let approval = ToolApprovalRequestOutput(
+                        approvalId: pending.toolCallId,
+                        toolCall: pending.typedCall
+                    )
+                    if let resolver = approvalResolver {
+                        let decision = await resolver(approval)
+                        if Task.isCancelled { break }
+                        switch decision {
+                        case .approve:
+                            scheduleToolExecution(pending)
+                        case .deny:
+                            await emitToolOutputDenied(
+                                callId: pending.toolCallId,
+                                toolName: pending.toolName
+                            )
+                        }
+                    } else {
+                        await fullBroadcaster.send(.toolApprovalRequest(approval))
+                        recordedContent.append(.toolApprovalRequest(approval))
+                        activeToolInputs.removeValue(forKey: pending.toolCallId)
+                        activeToolNames.removeValue(forKey: pending.toolCallId)
+                    }
+                }
+            }
+
+            for try await part in stream {
+                if let chunkTimeoutTask {
+                    chunkTimeoutTask.cancel()
+                }
+                if let chunkTimeoutMs = configuration.chunkTimeoutMs,
+                   let timeoutController = configuration.timeoutController {
+                    chunkTimeoutTask = Task {
+                        do {
+                            try await sleepMs(chunkTimeoutMs)
+                            timeoutController.markChunkTimedOut()
+                        } catch {}
+                    }
+                } else {
+                    chunkTimeoutTask = nil
+                }
+                try Task.checkCancellation()
+                if externalStopRequested {
+                    break
+                }
+                switch part {
             case .streamStart(let warnings):
                 capturedWarnings = warnings
                 sawStreamStart = true
@@ -1129,7 +1115,7 @@ case let .toolInputStart(id, toolName, providerMetadata, providerExecuted, dynam
                         tool: tool,
                         providerMetadata: typed.providerMetadata
                     )
-                    await toolCoordinator.submit(pending)
+                    scheduleToolExecution(pending)
                 }
 
             case .toolApprovalRequest(let request):
@@ -1181,7 +1167,6 @@ case let .toolInputStart(id, toolName, providerMetadata, providerExecuted, dynam
                         pendingDeferredToolCalls.removeValue(forKey: result.toolCallId)
                         activeToolInputs.removeValue(forKey: result.toolCallId)
                         activeToolNames.removeValue(forKey: result.toolCallId)
-                        removePendingApproval(toolCallId: result.toolCallId)
                     }
                 } else {
                     let typed = makeProviderToolResult(
@@ -1197,7 +1182,6 @@ case let .toolInputStart(id, toolName, providerMetadata, providerExecuted, dynam
                         pendingDeferredToolCalls.removeValue(forKey: result.toolCallId)
                         activeToolInputs.removeValue(forKey: result.toolCallId)
                         activeToolNames.removeValue(forKey: result.toolCallId)
-                        removePendingApproval(toolCallId: result.toolCallId)
                     }
                 }
             case let .finish(finishReason, usage, providerMetadata):
@@ -1227,9 +1211,12 @@ case let .toolInputStart(id, toolName, providerMetadata, providerExecuted, dynam
                 }
                 openReasoningIds.removeAll()
                 finalizePendingContent()
-                await resolvePendingApprovals(using: toolCoordinator)
-                await toolCoordinator.finish(cancelOutstanding: externalStopRequested || Task.isCancelled)
-                activeToolCoordinator = nil
+                await resolvePendingApprovals()
+                try await group.waitForAll()
+                try Task.checkCancellation()
+                if externalStopRequested {
+                    throw CancellationError()
+                }
 
                 let response = LanguageModelResponseMetadata(
                     id: capturedResponseId ?? configuration.generateId(),
@@ -1250,7 +1237,7 @@ case let .toolInputStart(id, toolName, providerMetadata, providerExecuted, dynam
                 let modelMessages = toResponseMessages(content: contentSnapshot, tools: tools)
                 let responseMessages = convertModelMessagesToResponseMessages(modelMessages)
                 let mergedMessages = recordedResponseMessages + responseMessages
-                let stepResult = DefaultStepResult(
+                let completedStep = DefaultStepResult(
                     content: contentSnapshot,
                     finishReason: unifiedFinishReason,
                     rawFinishReason: finishReason.raw,
@@ -1283,7 +1270,7 @@ case let .toolInputStart(id, toolName, providerMetadata, providerExecuted, dynam
                     pendingDeferredToolCalls.removeValue(forKey: output.toolCallId)
                 }
 
-                recordedSteps.append(stepResult)
+                recordedSteps.append(completedStep)
                 recordedResponseMessages.append(contentsOf: responseMessages)
                 accumulatedUsage = addLanguageModelUsage(accumulatedUsage, stepUsage)
                 currentToolCalls.removeAll()
@@ -1294,6 +1281,8 @@ case let .toolInputStart(id, toolName, providerMetadata, providerExecuted, dynam
                 // Keep the last seen reason in `recordedFinishReason`.
                 recordedFinishReason = unifiedFinishReason
                 recordedRawFinishReason = finishReason.raw
+                stepResult = .finishedStep
+                return
             case .file(let file):
                 let genFile = toGeneratedFile(file)
                 recordedContent.append(.file(file: genFile, providerMetadata: nil))
@@ -1320,20 +1309,16 @@ case let .toolInputStart(id, toolName, providerMetadata, providerExecuted, dynam
                 }
                 await fullBroadcaster.send(.raw(rawValue: raw))
             case .error(let err):
-                // Provider surfaced an error as a stream part. Terminate session
-                // through the single terminal path to keep promises/broadcasters consistent.
-                await finishAll(
-                    response: nil,
-                    usage: nil,
-                    finishReason: nil,
-                    providerMetadata: nil,
-                    error: StreamTextError.providerError(err)
-                )
-                return
+                throw StreamTextError.providerError(err)
             @unknown default:
                 break
             }
+            }
+
+            group.cancelAll()
+            try await group.waitForAll()
         }
+        return stepResult
     }
 
     private func finishAll(
@@ -1349,11 +1334,6 @@ case let .toolInputStart(id, toolName, providerMetadata, providerExecuted, dynam
         // If the provider supplied a tail step via `response/usage/finishReason`,
         // record it before resolving the promises or emitting the terminal `.finish`.
         finalizePendingContent()
-        await resolvePendingApprovals(using: activeToolCoordinator)
-        if let activeToolCoordinator {
-            await activeToolCoordinator.finish(cancelOutstanding: aborted || error != nil || externalStopRequested)
-            self.activeToolCoordinator = nil
-        }
         if let usage, let finishReason, let resp = response {
             let contentSnapshot = recordedContent
             let modelMessages = toResponseMessages(content: contentSnapshot, tools: tools)

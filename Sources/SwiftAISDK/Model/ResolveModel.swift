@@ -7,8 +7,8 @@ import AISDKProviderUtils
 
  Port of `@ai-sdk/ai/src/model/resolve-model.ts`.
 
- Provides functions to resolve model references (string IDs or direct model instances)
- into standardized V3 model interfaces. Handles V2-to-V3 model adaptation transparently.
+ Provides functions to normalize model references into standardized V3 model interfaces.
+ Handles V2-to-V3 model adaptation transparently.
  */
 
 // MARK: - V2 to V3 Adapters
@@ -566,71 +566,6 @@ private func _convertLanguageModelV2CallWarningToSharedV3Warning(_ warning: Lang
     }
 }
 
-// MARK: - Global Provider
-
-/**
- Global default provider for model resolution.
-
- When a model is specified as a string ID, this provider is used to resolve
- the ID to an actual model instance.
-
- Swift adaptation: Uses a nonisolated(unsafe) static property instead of JavaScript's `globalThis`.
- In TypeScript, this is `globalThis.AI_SDK_DEFAULT_PROVIDER`.
-
- If no custom provider is set, a default gateway provider should be used
- (gateway functionality is not included in this port, so it must be set explicitly).
-
- Thread safety: This is marked `nonisolated(unsafe)` to match the JavaScript behavior
- where globalThis can be mutated from any context. Users should ensure proper synchronization
- if accessing from multiple threads.
- */
-@available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
-nonisolated(unsafe) public var globalDefaultProvider: (any ProviderV3)? = nil
-
-/**
- Test-only switch to disable usage of `globalDefaultProvider` for string model resolution.
-
- When `true`, `resolveLanguageModel(.string(_))` and `resolveEmbeddingModel(.string(_))`
- behave as if no global provider is set, regardless of the actual global state.
- This helps eliminate flaky cross-suite interference when tests run in parallel.
-
- Default: `false`. Do not enable in production code.
- */
-// Task-local switch to disable usage of `globalDefaultProvider` for string model resolution.
-// Default is `false`. Used by tests to avoid cross-suite interference under parallel execution.
-@available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
-enum _ResolveModelContext {
-    @TaskLocal static var disableGlobalProvider: Bool = false
-    @TaskLocal static var overrideProvider: (any ProviderV3)? = nil
-}
-
-// Kept for backward-compat toggling in rare cases; prefer task-local helpers below.
-nonisolated(unsafe) public var disableGlobalProviderForStringResolution: Bool = false
-
-@available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
-@discardableResult
-public func withGlobalProviderDisabled<T>(_ operation: () throws -> T) rethrows -> T {
-    try _ResolveModelContext.$disableGlobalProvider.withValue(true) { try operation() }
-}
-
-@available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
-@discardableResult
-public func withGlobalProviderDisabled<T>(operation: () async throws -> T) async rethrows -> T {
-    try await _ResolveModelContext.$disableGlobalProvider.withValue(true) { try await operation() }
-}
-
-@available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
-@discardableResult
-public func withGlobalProvider<T>(_ provider: any ProviderV3, _ operation: () throws -> T) rethrows -> T {
-    try _ResolveModelContext.$overrideProvider.withValue(provider) { try operation() }
-}
-
-@available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
-@discardableResult
-public func withGlobalProvider<T>(_ provider: any ProviderV3, operation: () async throws -> T) async rethrows -> T {
-    try await _ResolveModelContext.$overrideProvider.withValue(provider) { try await operation() }
-}
-
 // MARK: - Resolution Functions
 
 /**
@@ -641,33 +576,12 @@ public func withGlobalProvider<T>(_ provider: any ProviderV3, operation: () asyn
  **Behavior**:
  - If the input is already a V3 model, returns it as-is
  - If the input is a V2 model, wraps it in an adapter that presents a V3 interface
- - If the input is a string ID, resolves it using the global default provider
- - If the input is an unsupported model version, throws `UnsupportedModelVersionError`
-
- - Parameter model: The language model to resolve (string ID, V2, or V3 model)
+ - Parameter model: The language model to resolve (V2 or V3 model)
  - Returns: A `LanguageModelV3` instance ready for use
- - Throws: `UnsupportedModelVersionError` if the model version is not v2 or v3,
-           or `NoSuchProviderError` if no global provider is set for string resolution
  */
 @available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
 public func resolveLanguageModel(_ model: LanguageModel) throws -> any LanguageModelV3 {
     switch model {
-    case .string(let id):
-        // Resolve string ID using task-local override or global provider
-        let disabled = disableGlobalProviderForStringResolution || _ResolveModelContext.disableGlobalProvider
-        let provider = _ResolveModelContext.overrideProvider ?? (disabled ? nil : globalDefaultProvider)
-        guard let provider else {
-            // TypeScript uses gateway as fallback, but we require explicit provider setup
-            throw NoSuchProviderError(
-                modelId: id,
-                modelType: .languageModel,
-                providerId: "default",
-                availableProviders: [],
-                message: "No global default provider set. Set `globalDefaultProvider` before resolving string model IDs."
-            )
-        }
-        return try provider.languageModel(modelId: id)
-
     case .v3(let model):
         // Already V3, return as-is
         return model
@@ -686,38 +600,12 @@ public func resolveLanguageModel(_ model: LanguageModel) throws -> any LanguageM
  **Behavior**:
  - If the input is already a V3 model, returns it as-is
  - If the input is a V2 model, wraps it in an adapter that presents a V3 interface
- - If the input is a string ID, resolves it using the global default provider
- - If the input is an unsupported model version, throws `UnsupportedModelVersionError`
-
- - Parameter model: The embedding model to resolve (string ID, V2, or V3 model)
+ - Parameter model: The embedding model to resolve (V2 or V3 model)
  - Returns: An `EmbeddingModelV3` instance ready for use
- - Throws: `UnsupportedModelVersionError` if the model version is not v2 or v3,
-           or `NoSuchProviderError` if no global provider is set for string resolution
  */
 @available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
 public func resolveEmbeddingModel<VALUE: Sendable>(_ model: EmbeddingModel<VALUE>) throws -> any EmbeddingModelV3<VALUE> {
     switch model {
-    case .string(let id):
-        // Resolve string ID using task-local override or global provider
-        let disabled = disableGlobalProviderForStringResolution || _ResolveModelContext.disableGlobalProvider
-        let provider = _ResolveModelContext.overrideProvider ?? (disabled ? nil : globalDefaultProvider)
-        guard let provider else {
-            // TypeScript uses gateway as fallback, but we require explicit provider setup
-            throw NoSuchProviderError(
-                modelId: id,
-                modelType: .textEmbeddingModel,
-                providerId: "default",
-                availableProviders: [],
-                message: "No global default provider set. Set `globalDefaultProvider` before resolving string model IDs."
-            )
-        }
-        // TODO AI SDK 6: figure out how to cleanly support different generic types
-        // For now, we trust that the provider returns the correct VALUE type.
-        // Swift adaptation: Provider returns EmbeddingModelV3<String>, but we need EmbeddingModelV3<VALUE>.
-        // We use force cast (as!) which will fail at runtime if types don't match.
-        // This matches the TypeScript behavior where type mismatches are caught at runtime.
-        return try provider.textEmbeddingModel(modelId: id) as! any EmbeddingModelV3<VALUE>
-
     case .v3(let model):
         // Already V3, return as-is
         return model

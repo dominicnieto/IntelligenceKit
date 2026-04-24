@@ -14,16 +14,12 @@ import AISDKProviderUtils
  Embedding model that is used by the AI SDK Core functions.
 
  Can be one of:
- - A string identifier (model ID that will be resolved via registry)
  - An `EmbeddingModelV3` protocol implementation
  - An `EmbeddingModelV2` protocol implementation
 
- TypeScript equivalent: `string | EmbeddingModelV3<VALUE> | EmbeddingModelV2<VALUE>`
+ Swift fork equivalent: `EmbeddingModelV3<VALUE> | EmbeddingModelV2<VALUE>`
  */
 public enum EmbeddingModel<VALUE: Sendable>: Sendable {
-    /// Model identifier string (will be resolved via registry)
-    case string(String)
-
     /// Embedding model V3 implementation
     case v3(any EmbeddingModelV3<VALUE>)
 

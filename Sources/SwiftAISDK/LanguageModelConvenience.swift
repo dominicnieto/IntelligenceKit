@@ -4,16 +4,10 @@ import AISDKProviderUtils
 import AISDKJSONSchema
 
 /**
- Convenience overloads for LanguageModel to match TypeScript API.
+ Convenience overloads for passing concrete model implementations directly.
 
  These overloads allow passing `LanguageModelV3` or `LanguageModelV2` directly
- without wrapping in `.v3()` or `.v2()`, matching the TypeScript union type behavior.
-
- TypeScript:
- ```typescript
- type LanguageModel = string | LanguageModelV3 | LanguageModelV2;
- generateText({ model: openai('gpt-4o'), ... })  // ✓ works
- ```
+ without wrapping in `.v3()` or `.v2()`.
 
  Swift (with these overloads):
  ```swift

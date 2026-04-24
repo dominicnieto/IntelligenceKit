@@ -2,9 +2,6 @@ import Foundation
 import AISDKProvider
 import AISDKProviderUtils
 
-/// Internal hook to allow tests to observe warning logging behavior.
-nonisolated(unsafe) var logWarningsForTranscribe: ([Warning]) -> Void = logWarnings
-
 /**
  Generates transcripts using a transcription model.
 
@@ -53,7 +50,7 @@ public func transcribe(
         )
     }
 
-    logWarningsForTranscribe(result.warnings.map { Warning.transcriptionModel($0) })
+    logWarnings(result.warnings.map { Warning.transcriptionModel($0) })
 
     if result.text.isEmpty {
         let responseMetadata = TranscriptionModelResponseMetadata(
